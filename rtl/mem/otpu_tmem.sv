@@ -983,7 +983,7 @@ endmodule
 (* keep_hierarchy = "yes" *)
 module otpu_pump_bank #(
   parameter int    N     = 8192,
-  parameter string STYLE = "block",
+  parameter logic [87:0] STYLE = "block",
   parameter bit    FW    = 1'b1      // the phase from a fast-domain register (below)
 ) (
   input  logic                 clk,
