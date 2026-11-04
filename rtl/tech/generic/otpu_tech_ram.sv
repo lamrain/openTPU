@@ -15,7 +15,7 @@
 module otpu_ram_1r1w #(
   parameter int    W     = 32,
   parameter int    N     = 1024,
-  parameter string STYLE = "block",
+  parameter logic [87:0] STYLE = "block",
   parameter bit    ZERO  = 1'b1
 ) (
   input  logic                 clk,
@@ -60,7 +60,7 @@ endmodule
 module otpu_ram_1r1w_be #(
   parameter int    W     = 64,           // a multiple of 8
   parameter int    N     = 1024,
-  parameter string STYLE = "block",
+  parameter logic [87:0] STYLE = "block",
   parameter bit    ZERO  = 1'b1
 ) (
   input  logic                 clk,
@@ -99,7 +99,7 @@ endmodule
 module otpu_ram_1rw #(
   parameter int    W     = 32,
   parameter int    N     = 1024,
-  parameter string STYLE = "block",
+  parameter logic [87:0] STYLE = "block",
   parameter bit    ZERO  = 1'b1
 ) (
   input  logic                 clk,
@@ -138,7 +138,7 @@ endmodule
 module otpu_ram_1rw1r #(
   parameter int    W     = 32,
   parameter int    N     = 1024,
-  parameter string STYLE = "block",
+  parameter logic [87:0] STYLE = "block",
   parameter bit    ZERO  = 1'b1
 ) (
   input  logic                 clk,
