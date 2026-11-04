@@ -1,11 +1,13 @@
-build/
+build
 __pycache__/
 *.pyc
 .pytest_cache/
 obj_dir/
-models/
+models
 .claude/
 .tourney/
 tools/tourney/runs/*/agents/
 tools/tourney/runs/fmax/*/agents/
 tools/tourney/runs/_full/*.lock
+venv
+*.egg-info
