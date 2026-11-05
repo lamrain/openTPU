@@ -52,6 +52,7 @@ jobs="${JOBS:-8}"
 # The target (targets/ypcb-00338.toml through opentpu/target.py): the defaults of the knobs below,
 # the platform id and the arch hash the CFG_* registers report. Without a working python3 the
 # built-in defaults stay (the same values) and CFG_HASH reads 0.
+# opentpu.target 据此读取 targets/ypcb-00338.toml，并采用该文件 [target] 中指定的默认 variant m4。
 target="${TARGET:-ypcb-00338}"
 if tenv="$(PYTHONPATH="$root" python3 -m opentpu.target env "$target" 2>/dev/null)"; then
   eval "$tenv"

@@ -63,7 +63,19 @@ lint:
 lint-ld: lint
 
 bit:
-	$(if $(TARGET),TARGET=$(TARGET)) $(if $(MCOLS),MCOLS=$(MCOLS)) $(if $(ACT_ROWS),ACT_ROWS=$(ACT_ROWS)) $(if $(MXU_E),MXU_E=$(MXU_E)) $(if $(VPU_CL),VPU_CL=$(VPU_CL)) $(if $(LANES),LANES=$(LANES)) CORE_MHZ=$(CORE_MHZ) $(if $(TMEM_IMPL),TMEM_IMPL=$(TMEM_IMPL)) $(if $(TMEM_RQ),TMEM_RQ=$(TMEM_RQ)) $(if $(TMEM_X),TMEM_X=$(TMEM_X)) $(if $(TMEM_WORDS),TMEM_WORDS=$(TMEM_WORDS)) $(if $(BUILD_ID),BUILD_ID=$(BUILD_ID)) ./run_vivado.sh $(DDR)
+	$(if $(TARGET),TARGET=$(TARGET)) \
+	$(if $(MCOLS),MCOLS=$(MCOLS)) \
+	$(if $(ACT_ROWS),ACT_ROWS=$(ACT_ROWS)) \
+	$(if $(MXU_E),MXU_E=$(MXU_E)) \
+	$(if $(VPU_CL),VPU_CL=$(VPU_CL)) \
+	$(if $(LANES),LANES=$(LANES)) \
+	CORE_MHZ=$(CORE_MHZ) \
+	$(if $(TMEM_IMPL),TMEM_IMPL=$(TMEM_IMPL)) \
+	$(if $(TMEM_RQ),TMEM_RQ=$(TMEM_RQ)) \
+	$(if $(TMEM_X),TMEM_X=$(TMEM_X)) \
+	$(if $(TMEM_WORDS),TMEM_WORDS=$(TMEM_WORDS)) \
+	$(if $(BUILD_ID),BUILD_ID=$(BUILD_ID)) \
+	./run_vivado.sh $(DDR)
 
 impl:
 	STEP=impl ./run_vivado.sh $(DDR)

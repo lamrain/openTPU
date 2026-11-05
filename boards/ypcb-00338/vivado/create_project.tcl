@@ -118,7 +118,11 @@ set_property verilog_define {SYNTHESIS} [get_filesets sources_1]
 # ---- block design
 source $here/bd_native.tcl   ;# sets PCIE_GEN (environment, run_vivado.sh) for the generics; CLK2X
 make_wrapper -files [get_files otpu_bd.bd] -top
-add_files -norecurse [glob $out/otpu.gen/sources_1/bd/otpu_bd/hdl/otpu_bd_wrapper.v]
+set wrapper_file "$out/otpu.srcs/sources_1/bd/otpu_bd/hdl/otpu_bd_wrapper.v"
+if {![file exists $wrapper_file]} {
+    error "Wrapper file not found: $wrapper_file"
+}
+add_files -norecurse $wrapper_file
 set_property top otpu_fpga_top_ld [current_fileset]
 # otpu_seq WAITC (run_vivado.sh: the target's [arch] SEQ_WC, or SEQ_WC=1; CFG_UARCH bit24)
 set SEQ_WC [expr {[info exists ::env(OTPU_SEQ_WC_GEN)] && $::env(OTPU_SEQ_WC_GEN) eq "1" ? 1 : 0}]
