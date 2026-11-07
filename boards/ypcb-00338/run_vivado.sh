@@ -108,6 +108,7 @@ run() {  # run a Vivado Tcl script with arguments
     fi
     docker run --rm \
       -v "$root:$root" -w "$root" \
+      # -e "OTPU_TMEM_X=$tmem_x" 
       ${VIVADO_MAC:+--mac-address "$VIVADO_MAC"} \
       ${XILINXD_LICENSE_FILE:+-v "$XILINXD_LICENSE_FILE:$XILINXD_LICENSE_FILE:ro" -e "XILINXD_LICENSE_FILE=$XILINXD_LICENSE_FILE"} \
       ${VIVADO_MOUNT:+-v "$VIVADO_MOUNT"} \
@@ -127,6 +128,7 @@ mkdir -p "$out"
 export OTPU_IP_CACHE="${OTPU_IP_CACHE-$HOME/.cache/otpu-vivado-ip}"
 export OTPU_FAST="${FAST:-0}"
 export OTPU_SEQ_WC_GEN="$seq_wc"
+export OTPU_TMEM_X="$tmem_x"        # solve TMEM_X: 'NSB' is not NAME=integer
 export PCIE_GEN="${PCIE_GEN:-2}"    # read by vivado/bd_native.tcl and userclk1_reroute.tcl
 export TRACE_DEPTH="${TRACE_DEPTH:-${T_TRACE_DEPTH:-16384}}"   # read by vivado/create_project.tcl
 export COLL_GATHER="${COLL_GATHER:-0}"                          # read by vivado/create_project.tcl

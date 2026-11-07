@@ -64,7 +64,17 @@ set TMEM_IMPL [expr {[llength $argv] > 13 ? [lindex $argv 13] : 0}]
 # TMEM_RQ (TMEM_IMPL 1): the banks' addresses from the requests by priority, not the grants
 set TMEM_RQ [expr {[llength $argv] > 14 ? [lindex $argv 14] : 0}]
 if {$TMEM_RQ ni {0 1}} { error "TMEM_RQ $TMEM_RQ: 0 or 1" }
-set TMEM_X [expr {[llength $argv] > 15 ? [lindex $argv 15] : ""}]
+if {[info exists ::env(OTPU_TMEM_X)]} {
+  set TMEM_X $::env(OTPU_TMEM_X)
+  set TMEM_X_SOURCE environment
+} elseif {[llength $argv] > 15} {
+  set TMEM_X [lindex $argv 15]
+  set TMEM_X_SOURCE argv
+} else {
+  set TMEM_X ""
+  set TMEM_X_SOURCE default
+}
+puts "TMEM_X diagnostic: source=$TMEM_X_SOURCE argc=[llength $argv], argv15=<[lindex $argv 15]>, value=<$TMEM_X>, fields=<[split $TMEM_X ,]>"
 source $here/tmem_knobs.tcl   ;# TMEM_GEN, CLK2X (bd_native.tcl's core_clk2x)
 if {$BUILD_ID eq ""} {
   if {[catch {exec git -C $root rev-parse HEAD} BUILD_ID]} { set BUILD_ID 0 }

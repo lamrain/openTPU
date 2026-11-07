@@ -7,6 +7,13 @@ The card exposes, through the XDMA bridge:
     AXI address);
   - the control registers (rtl/shell/otpu_ctrl.sv; map in regs.py and
     docs/observability.md) on BAR0, /dev/xdma0_user.
+该卡通过 XDMA 桥暴露以下内容：
+  - 其位于桥上 AXI master 上的内存通道：通道 j 位于 BASE[j] (YPCB-00338 的两个
+    DDR3 通道，每个 2 GiB; 其 CFG_* 寄存器中第 4 个比特流定义了寄存器映射：
+    channel_map), 可通过 /dev/xdma0_h2c_0 写入，并通过 /dev/xdma0_c2h_0 读取（文件偏移量 =
+    AXI 地址);
+  - 位于 BAR0 上的控制寄存器 (rtl/shell/otpu_ctrl.sv; 映射信息见 regs.py 和
+    docs/observability.md), 通过 /dev/xdma0_user 访问。
 
 The accelerator addresses one logical DRAM interleaved over the channels in 64-byte beats:
 logical beat b of chunk m = b // 2 lives at BASE[c] + m * 64 on channel c = b % 2, or, on a
@@ -21,6 +28,11 @@ attach), so `Engine(..., cfg=device_config(board.info()), backend=BoardBackend)`
 LFM2 or Qwen3.5 on the card; device_config takes MCOLS and LANES from the bitstream's VERSION
 register. With transport=SimTransport the identical protocol runs against the Verilator model
 of the board (sim/verilator/tb_board.sv) -- the bring-up rehearsal.
+BoardBackend 实现了 Engine 后端接口（写入/读取/运行，以及准备和
+连接），因此 `Engine(..., cfg=device_config(board.info()), backend=BoardBackend)` 可在该卡上运行 Qwen3、
+LFM2 或 Qwen3.5; device_config 从位流的 VERSION 寄存器中获取 MCOLS 和 LANES。
+当 transport=SimTransport 时，相同的协议将针对该板的 Verilator 模型
+(sim/verilator/tb_board.sv) 运行——即启动演练。
 
 A Board takes the device's exclusive lock (runstate.DeviceLock, /tmp/otpu/<dev>.lock) when its
 transport names a device (XdmaTransport, FakeTransport); monitors pass lock=False. Register map

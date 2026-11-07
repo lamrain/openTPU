@@ -35,12 +35,12 @@ opentpu/isasim.py       opentpu/rtlsim.py
 
 | 后端 | 入口 | 主要验证内容 | 速度 |
 |---|---|---|---|
-| ISA | `opentpu.isasim`、`backend=isa` | ISA 功能、DRAM/TMEM 结果、模型正确性 | 快 |
-| RTL | `opentpu.rtlsim`、`backend=rtl` | SystemVerilog 微架构、握手、周期、RTL 与 ISA 一致性 | 慢 |
-| Board-sim | `SimTransport`、`backend=board-sim` | 板级控制寄存器、AXI/native memory、host driver 协议 | 最慢 |
+| ISA       | `opentpu.isasim`、`backend=isa`       | ISA 功能、DRAM/TMEM 结果、模型正确性                | 快 |
+| RTL       | `opentpu.rtlsim`、`backend=rtl`       | SystemVerilog 微架构、握手、周期、RTL 与 ISA 一致性  | 慢 |
+| Board-sim | `SimTransport`、  `backend=board-sim` | 板级控制寄存器、AXI/native memory、host driver 协议 | 最慢 |
+| FPGA      | `XdmaTransport`、 `backend=board`     | 由 `opentpu/host/board.py` 通过 XDMA 访问真实设备  | 最快 |
 
 RTL 和板级仿真使用 Verilator 编译 SystemVerilog。
-实际 FPGA 卡不属于仿真后端，对应的是 `backend=board`，由 `opentpu/host/board.py` 通过 XDMA 访问真实设备。
 
 ## 2. 共同输入和执行流程
 
@@ -61,11 +61,10 @@ runtime 的核心实现是 [`opentpu/runtime.py`](opentpu/runtime.py)，其中�
 - `KVCache` 负责 KV cache 的布局；
 - `launch()`/`run()` 负责选择 ISA 或 RTL 执行路径。
 
-模型层的 backend 选择以 [`opentpu/llm/qwen3.py`](opentpu/llm/qwen3.py) 的
-`Engine` 为例；LFM2、Qwen3.5、Gemma 4 等模型在各自的 `opentpu/llm/*.py`
-中复用同一套协议。
+模型层的 backend 选择以 [`opentpu/llm/qwen3.py`](opentpu/llm/qwen3.py) 的 `Engine` 为例；
+LFM2、Qwen3.5、Gemma 4 等模型在各自的 `opentpu/llm/*.py` 中复用同一套协议。
 
-## 3. ISA 功能仿真
+## 3. ISA 功能仿真 (backend=isa)
 
 ### 3.1 实现和入口
 
@@ -90,21 +89,20 @@ from opentpu import runtime
 result = runtime.launch(kernel, cfg, backend="isa", **args)
 ```
 
-其中 `cfg` 是 [`opentpu.isasim.Config`](opentpu/isasim.py)，`args` 使用
-`runtime.Input`、`runtime.Weight`、`runtime.Output` 和 `runtime.KVCache` 等对象。
-kernel 的编译和参数约束由 `opentpu.compiler`、`opentpu.language` 以及现有
-`opentpu/kernels/` 负责；新 kernel 建议参考现有 kernel/test，而不是绕过 compiler
-直接构造 program。
+其中 `cfg` 是 [`opentpu.isasim.Config`](opentpu/isasim.py)，
+`args` 使用 `runtime.Input`、`runtime.Weight`、`runtime.Output` 和 `runtime.KVCache` 等对象。
+kernel 的编译和参数约束由 `opentpu.compiler`、`opentpu.language` 以及现有 `opentpu/kernels/` 负责；
+新 kernel 建议参考现有 kernel/test，而不是绕过 compiler 直接构造 program。
 
-### 3.3 运行模型和验证
+### 3.3 运行模型和验证，运行正常
 
 ```sh
 python3 tools/validate.py --model qwen3
 python3 tools/validate.py --model lfm2 --wformat fp4 --head-format int8
 ```
 
-`validate.py` 默认使用 ISA simulator，并将设备输出与 CPU 上的量化 golden
-比较。`--against` 可以把另一个 ISA/RTL/board 运行作为第二个设备进行比较。
+`validate.py` 默认使用 ISA simulator，并将设备输出与 CPU 上的量化 golden 比较。
+`--against` 可以把另一个 ISA/RTL/board 运行作为第二个设备进行比较。
 
 ISA 仿真适合首先确认：
 
@@ -113,7 +111,7 @@ ISA 仿真适合首先确认：
 - KV cache、prefill、decode 是否正确；
 - 输出 token/logit 是否符合 golden。
 
-## 4. Verilator RTL 仿真
+## 4. Verilator RTL 仿真 (backend=rtl)
 
 ### 4.1 实现和构建入口
 
@@ -125,16 +123,15 @@ RTL 仿真的 Python 封装位于 [`opentpu/rtlsim.py`](opentpu/rtlsim.py)：
 - `run()` 将 ISA program 和 DRAM image 交给 RTL testbench；
 - `BOARD_UARCH` 提供板卡微架构参数。
 
-核心 RTL 源文件位于 [`rtl/`](rtl/)，通用 testbench 位于
-[`sim/verilator/`](sim/verilator/)。
+核心 RTL 源文件位于 [`rtl/`](rtl/)，通用 testbench 位于 [`sim/verilator/`](sim/verilator/)。
 
 RTL 仿真至少有两种常用范围：
 
 1. `tb_top.sv`：验证核心 slice、ISA 执行和内存模型。
-2. `tb_board.sv`：验证板级控制寄存器、程序加载、两个内存通道和 host script
-   协议；它不模拟真实 PCIe、XDMA PHY、FPGA 时钟树或 DDR PHY 校准。
+2. `tb_board.sv`：验证板级控制寄存器、程序加载、两个内存通道和 host script 协议；
+   它不模拟真实 PCIe、XDMA PHY、FPGA 时钟树或 DDR PHY 校准。
 
-### 4.2 直接运行 RTL 后端
+### 4.2 直接运行 RTL 后端，运行正常
 
 ```sh
 python3 tools/validate.py \
@@ -146,8 +143,8 @@ python3 tools/validate.py \
 ```
 
 RTL 后端由 [`opentpu/llm/rtl_backend.py`](opentpu/llm/rtl_backend.py) 实现，
-它保留 DRAM image，在每次 run 时调用 `rtlsim.run()`。真实模型在 RTL 上很慢，
-通常使用短 prompt 和少量 token。
+它保留 DRAM image，在每次 run 时调用 `rtlsim.run()`。
+真实模型在 RTL 上很慢，通常使用短 prompt 和少量 token。
 
 ### 4.3 直接调用 `rtlsim.run()`
 
@@ -214,11 +211,11 @@ python3 tools/validate.py \
 | 参数 | 含义 |
 |---|---|
 | `tools/validate.py` | 模型级验证入口，不是 pytest 测试文件 |
-| `--model lfm2` | 加载 LFM2 的 tokenizer、配置和权重 |
-| `--backend rtl` | 把主设备设为 RTL 后端；首次遇到新的 RTL/参数组合时由 Verilator 编译 testbench |
-| `--against isa` | 再用相同输入、权重和配置运行 ISA simulator，并比较两个设备结果 |
-| `--tokens 3` | 最多生成 3 个 token；这里采用 greedy decode |
-| 最后的字符串 | 输入 prompt，先执行 prefill，再执行 decode |
+| `--model lfm2`      | 加载 LFM2 的 tokenizer、配置和权重 |
+| `--backend rtl`     | 把主设备设为 RTL 后端；首次遇到新的 RTL/参数组合时由 Verilator 编译 testbench |
+| `--against isa`     | 再用相同输入、权重和配置运行 ISA simulator，并比较两个设备结果 |
+| `--tokens 3`        | 最多生成 3 个 token；这里采用 greedy decode |
+| 最后的字符串          | 输入 prompt，先执行 prefill，再执行 decode |
 
 实际执行顺序如下：
 
@@ -233,9 +230,8 @@ python3 tools/validate.py \
 6. 除非指定 `--no-golden`，脚本还会把设备结果与 CPU/Hugging Face 的量化
          golden 做额外比较。
 
-因此，这条命令是一次**模型级端到端对比**：它重点回答“当前 LFM2 prompt 在
-RTL 上的结果是否与 ISA simulator 一致”。它会实际运行模型，速度通常比单元测试
-慢很多；`--tokens 3` 只是缩短 decode 阶段，不会跳过模型加载、权重布局、kernel
+因此，这条命令是一次**模型级端到端对比**：它重点回答“当前 LFM2 prompt 在 RTL 上的结果是否与 ISA simulator 一致”。
+它会实际运行模型，速度通常比单元测试慢很多；`--tokens 3` 只是缩短 decode 阶段，不会跳过模型加载、权重布局、kernel
 编译或 RTL 编译。
 
 `python3 -m pytest -q` 则是另一条入口：
@@ -248,9 +244,8 @@ python3 -m pytest -q
         自动发现整个 `tests/` 目录；`-q` 只控制输出详细程度。
 - 测试范围比上面的 LFM2 命令更广，包含 ISA、compiler、kernel、FP、host、
         board 和 RTL 等测试，不等价于“运行一次 `validate.py`”。
-- 部分 RTL 测试会通过 `opentpu.rtlsim` 间接调用 Verilator，因此可能复现
-        Verilator 编译错误；但许多 pytest 用例只测试 Python/ISA/compiler 逻辑，
-        不会启动 RTL。
+- 部分 RTL 测试会通过 `opentpu.rtlsim` 间接调用 Verilator，因此可能复现 Verilator 编译错误；
+        但许多 pytest 用例只测试 Python/ISA/compiler 逻辑，不会启动 RTL。
 - `tests/test_validate.py` 可以测试 `validate.py` 的部分辅助逻辑，但默认全量
         pytest 不会自动执行上面的具体 LFM2 prompt，除非测试代码显式调用它。
 
@@ -266,12 +261,12 @@ python3 tools/validate.py ...
                 -> RTL run + ISA run + logits/token 对比 + CPU golden 对比
 ```
 
-排查 RTL 编译问题时，先运行短的 `validate.py` 命令可以快速确认模型级 RTL
-路径；修复完成后再运行 `python3 -m pytest -q`，确认没有影响其他模块。两条命令
-应使用同一个 Python 环境，并确保该环境安装了 `numpy`、PyTorch、Transformers
+排查 RTL 编译问题时，先运行短的 `validate.py` 命令可以快速确认模型级 RTL 路径；
+修复完成后再运行 `python3 -m pytest -q`，确认没有影响其他模块。
+两条命令应使用同一个 Python 环境，并确保该环境安装了 `numpy`、PyTorch、Transformers
 以及 Verilator 5 等项目依赖。
 
-## 5. 板级 Verilator 仿真
+## 5. 板级 Verilator 仿真 (backend=board-sim)
 
 ### 5.1 结构
 
@@ -297,15 +292,13 @@ tb_board.sv
 
 | 命令 | 含义 |
 |---|---|
-| `W addr value` | AXI-Lite 写寄存器 |
-| `R addr` | 读取寄存器并输出 `REG` |
+| `W addr value`      | AXI-Lite 写寄存器 |
+| `R addr`            | 读取寄存器并输出 `REG` |
 | `P addr mask value` | 轮询寄存器直到 `(read & mask) == value` |
-| `C cycles` | 等待 core clock 周期 |
+| `C cycles`          | 等待 core clock 周期 |
 
-默认每次 flush 都是一次新的 RTL 仿真；channel DRAM image 会保留，但控制寄存器、
-IMEM 和 TMEM 从 reset 开始。因此 `Board` 协议会把一次 program load、run 和结果读取
-放进同一次 flush。
-
+默认每次 flush 都是一次新的 RTL 仿真；channel DRAM image 会保留，但控制寄存器、IMEM 和 TMEM 从 reset 开始。
+因此 `Board` 协议会把一次 program load、run 和结果读取放进同一次 flush。
 这一层模拟的是板卡 host protocol，不是完整 PCIe 链路。真实硬件中的 PCIe/XDMA 驱动被 `SimTransport` 替代。
 
 ### 5.2 通过 host driver 运行
@@ -334,8 +327,8 @@ host.chat.make_backend("board-sim")
 ```
 
 因此它能复用真实卡使用的 `BoardBackend`、寄存器协议、程序加载和轮询逻辑。
-代价是每个 flush 都要编译或运行 Verilator，完整模型会非常慢；建议先使用
-`--tokens 1` 或短 prompt。
+代价是每个 flush 都要编译或运行 Verilator，完整模型会非常慢；
+建议先使用 `--tokens 1` 或短 prompt。
 
 ### 5.3 self-test 和诊断
 
@@ -344,11 +337,12 @@ otpu-selftest --sim --model lfm2 --tokens 1
 otpu-diag --sim
 ```
 
-`--sim` 使用板级 Verilator 模型，适合验证从寄存器、loader、内存测试到模型运行
-的整条 host 流程。它不能替代真实卡上的 PCIe link、XDMA 驱动、DDR PHY 校准和
-板级时钟验证。
+`--sim` 使用板级 Verilator 模型，适合验证从寄存器、loader、内存测试到模型运行的整条 host 流程。
+它不能替代真实卡上的 PCIe link、XDMA 驱动、DDR PHY 校准和板级时钟验证。
 
-### 5.4 真实板卡：准备、诊断和运行命令
+## 6. FPGA 真实板卡 (backend=board)
+
+### 6.1 准备、诊断和运行命令
 
 真实板卡使用 `backend=board`，默认设备前缀是 `/dev/xdma0`。运行前需要满足：
 
@@ -378,13 +372,13 @@ openTPU bitstream
 
 | 节点 | 产生的接口 | Python 中的用途 |
 |---|---|---|
-| `/dev/xdma0_user` | XDMA 的 user BAR，映射 FPGA BAR0 | `mmap()` 后访问 AXI-Lite 控制寄存器 |
-| `/dev/xdma0_h2c_0` | Host-to-Card DMA channel 0 | `os.pwrite()` 把 DRAM image、program 和参数写入卡 |
-| `/dev/xdma0_c2h_0` | Card-to-Host DMA channel 0 | `os.pread()` 从卡读回 logits、状态、DRAM 和 trace |
+| `/dev/xdma0_user`  | XDMA 的 user BAR，映射 FPGA BAR0 | `mmap()` 后访问 AXI-Lite 控制寄存器 |
+| `/dev/xdma0_h2c_0` | Host-to-Card DMA channel 0      | `os.pwrite()` 把 DRAM image、program 和参数写入卡 |
+| `/dev/xdma0_c2h_0` | Card-to-Host DMA channel 0      | `os.pread()` 从卡读回 logits、状态、DRAM 和 trace |
 
-其中 `user` 对应控制通路，`h2c_0`/`c2h_0` 对应数据通路。FPGA 内部的 AXI-Lite
-控制寄存器和 DDR3 AXI master 必须已经连接到 XDMA bridge；仅安装驱动、没有正确
-bitstream 时，驱动可能加载但不会得到可用的 openTPU 设备。
+其中 `user` 对应控制通路，`h2c_0`/`c2h_0` 对应数据通路。
+FPGA 内部的 AXI-Lite 控制寄存器和 DDR3 AXI master 必须已经连接到 XDMA bridge；
+仅安装驱动、没有正确 bitstream 时，驱动可能加载但不会得到可用的 openTPU 设备。
 
 #### 产生这些节点需要的依赖
 
@@ -394,8 +388,7 @@ bitstream 时，驱动可能加载但不会得到可用的 openTPU 设备。
          - openTPU FPGA bitstream，包含 PCIe endpoint、XDMA bridge、BAR0 AXI-Lite
                  控制路径和 DDR3 AXI memory path；
          - PCIe 插槽、链路训练和供电正常；
-         - JTAG 或 flash 工具用于加载 bitstream。JTAG 只负责配置 FPGA，不负责创建
-                 `/dev/xdma*` 节点。
+         - JTAG 或 flash 工具用于加载 bitstream。JTAG 只负责配置 FPGA，不负责创建 `/dev/xdma*` 节点。
 2. **Linux 驱动构建环境**
          - Linux 主机和当前运行内核的 headers，例如 `linux-headers-$(uname -r)`；
          - `make`、`gcc` 或内核使用的 `clang/llvm`、`patch`；
@@ -404,15 +397,13 @@ bitstream 时，驱动可能加载但不会得到可用的 openTPU 设备。
          - 可选 DKMS，用于内核升级后自动重建模块。
 3. **驱动加载和设备管理**
          - 可加载的 `xdma.ko`，并且必须是项目版而不是其他平台的同名 XDMA 模块；
-         - `udev` 规则 `59-otpu-xdma.rules`：按 PCI vendor/device 或 subsystem ID
-                 将设备绑定到 `xdma`；
+         - `udev` 规则 `59-otpu-xdma.rules`：按 PCI vendor/device 或 subsystem ID 将设备绑定到 `xdma`；
          - `udev` 规则 `60-otpu.rules`：为 `*_user`、`*_h2c_*`、`*_c2h_*` 设置访问权限；
          - 用户需要有访问这些节点的权限。项目规则默认设置为非 root 可访问，生产环境
                  可按主机安全策略改为专用用户组。
 
-仓库中的 [`opentpu/host/setup_pcie.sh`](opentpu/host/setup_pcie.sh) 会安装或检查
-上述驱动、udev 规则和 modprobe 选项。它固定了 XDMA 源码提交和 `otpu` 模块标签，
-并检查驱动是否真的绑定到 openTPU 卡，而不是只检查 `modprobe xdma` 是否成功。
+仓库中的 [`opentpu/host/setup_pcie.sh`](opentpu/host/setup_pcie.sh) 会安装或检查上述驱动、udev 规则和 modprobe 选项。
+它固定了 XDMA 源码提交和 `otpu` 模块标签，并检查驱动是否真的绑定到 openTPU 卡，而不是只检查 `modprobe xdma` 是否成功。
 
 首次安装或内核升级后，在板卡主机上安装匹配的 XDMA 驱动并检查设备：
 
@@ -428,8 +419,8 @@ otpu-setup --rescan
 otpu-setup --check
 ```
 
-`otpu-setup` 使用项目固定版本的 Xilinx XDMA 驱动；不要把系统自带的、面向
-其他 Alveo 卡的同名 `xdma` 模块误认为是 openTPU 驱动。
+`otpu-setup` 使用项目固定版本的 Xilinx XDMA 驱动；
+不要把系统自带的、面向其他 Alveo 卡的同名 `xdma` 模块误认为是 openTPU 驱动。
 
 如果节点没有出现，按以下顺序排查：
 
@@ -442,9 +433,9 @@ dmesg | grep -i -E 'xdma|pcie|openTPU'
 ```
 
 常见原因是 bitstream 在 PCIe 枚举之后重新加载但没有执行 `otpu-setup --rescan`、
-驱动没有为当前内核编译、系统自带 `xdma` 抢先绑定，或 udev 规则没有安装。节点
-存在但 Python 无法打开时，优先检查文件权限和设备锁；不要手工创建 `/dev/xdma*`，
-因为手工节点没有对应的内核 file operation，不能访问 FPGA。
+驱动没有为当前内核编译、系统自带 `xdma` 抢先绑定，或 udev 规则没有安装。
+节点存在但 Python 无法打开时，优先检查文件权限和设备锁；
+不要手工创建 `/dev/xdma*`，因为手工节点没有对应的内核 file operation，不能访问 FPGA。
 
 先做分阶段硬件自检。默认不带 `--sim` 时访问真实卡：
 
@@ -455,9 +446,9 @@ otpu-smi
 ```
 
 `otpu-selftest` 会依次检查设备 ID、bitstream 配置、DDR 校准、DRAM scrub、寄存器、
-地址/数据模式以及更高层的运行路径；某一阶段失败时停止并给出排查提示。`otpu-diag`
-用于更详细的 PCIe、bitstream、寄存器和内存诊断，`otpu-smi` 用于查看运行状态和
-计数器。需要指定其他 XDMA 设备时使用对应 CLI 的 `--dev /dev/xdmaN`。
+地址/数据模式以及更高层的运行路径；某一阶段失败时停止并给出排查提示。
+`otpu-diag` 用于更详细的 PCIe、bitstream、寄存器和内存诊断，`otpu-smi` 用于查看运行状态和计数器。
+需要指定其他 XDMA 设备时使用对应 CLI 的 `--dev /dev/xdmaN`。
 
 使用真实卡运行模型：
 
@@ -482,7 +473,7 @@ otpu-lock -- otpu-chat --model lfm2 --backend board
 前者使用 `XdmaTransport`，后者使用 `SimTransport`，
 后者不会打开 PCIe 设备，也不会访问真实 FPGA。
 
-### 5.5 Python 到 FPGA 逻辑电路的调用栈
+### 6.2 Python 到 FPGA 逻辑电路的调用栈
 
 真实卡上的 Python 调用栈如下：
 
@@ -517,11 +508,10 @@ PCIe + XDMA bridge
         `-- DRAM channels -> MXU, VPU, DMA, TMEM and ACT RAM
 ```
 
-### 5.5.1 Python 与 `dma_ip_drivers` 的交互
+#### 6.2.1 Python 与 `dma_ip_drivers` 的交互（驱动相关）
 
-Python 不直接导入或调用 `dma_ip_drivers` 的 Python/C API。`dma_ip_drivers` 是
-Linux 内核态 XDMA 驱动，Python 通过 Linux 设备文件、文件描述符和内存映射间接
-使用它：
+Python 不直接导入或调用 `dma_ip_drivers` 的 Python/C API。
+`dma_ip_drivers` 是Linux 内核态 XDMA 驱动，Python 通过 Linux 设备文件、文件描述符和内存映射间接使用它：
 
 ```text
 Python 标准库
@@ -541,11 +531,11 @@ PCIe + FPGA XDMA bridge + AXI-Lite / AXI memory
 
 | Python 层 | 设备节点/API | 作用 |
 |---|---|---|
-| `XdmaTransport.__init__()` | `os.open("/dev/xdma0_user")` | 打开 BAR0 user 接口 |
+| `XdmaTransport.__init__()`                | `os.open("/dev/xdma0_user")` | 打开 BAR0 user 接口 |
 | `mmap.mmap()`、`reg_read()`、`reg_write()` | BAR0 AXI-Lite | 访问 VERSION、CAPS、ARG、CTRL、STATUS 和计数器 |
-| `mem_write()` | `/dev/xdma0_h2c_0` + `os.pwrite()` | Host-to-Card，写入 DRAM image、program 和参数 |
-| `mem_read()` | `/dev/xdma0_c2h_0` + `os.pread()` 或 `os.readinto()` | Card-to-Host，读回 logits、状态、DRAM 和 trace |
-| `poll()` | BAR0 寄存器连续读取 | 等待 `STATUS.HALTED`、`STATUS.WR_IDLE` 或加载完成 |
+| `mem_write()`                             | `/dev/xdma0_h2c_0` + `os.pwrite()` | Host-to-Card，写入 DRAM image、program 和参数 |
+| `mem_read()`                              | `/dev/xdma0_c2h_0` + `os.pread()` 或 `os.readinto()` | Card-to-Host，读回 logits、状态、DRAM 和 trace |
+| `poll()`                                  | BAR0 寄存器连续读取 | 等待 `STATUS.HALTED`、`STATUS.WR_IDLE` 或加载完成 |
 
 这些底层传输由 `Board` 封装为逻辑操作：
 
@@ -566,13 +556,11 @@ Board.start() / Board.wait()
         -> STATUS.LOADING / HALTED / WR_IDLE
 ```
 
-对于 DRAM 数据，`Board` 不把逻辑地址直接当成单一物理地址写入。它会按 64-byte
-beat 和 bitstream 的 channel map，把逻辑 DRAM 分发到两个物理通道；读回时再重新
-交织。未对齐的边缘访问会先扩展到完整 beat，避免向 FPGA DDR/ECC 路径发出不支持
-的 sub-beat DMA。
-
-安装阶段不是 Python 运行时 DMA，而是 [`opentpu/host/setup_pcie.sh`](opentpu/host/setup_pcie.sh)
-负责准备内核驱动：
+对于 DRAM 数据，`Board` 不把逻辑地址直接当成单一物理地址写入。
+它会按 64-byte beat 和 bitstream 的 channel map，把逻辑 DRAM 分发到两个物理通道；
+读回时再重新交织。
+未对齐的边缘访问会先扩展到完整 beat，避免向 FPGA DDR/ECC 路径发出不支持的 sub-beat DMA。
+[`opentpu/host/setup_pcie.sh`](opentpu/host/setup_pcie.sh) 负责准备内核驱动：
 
 ```text
 固定版本 dma_ip_drivers 源码
@@ -583,13 +571,13 @@ beat 和 bitstream 的 channel map，把逻辑 DRAM 分发到两个物理通道�
         -> 驱动注册 /dev/xdmaN_user、h2c_N、c2h_N
 ```
 
-`opentpu/host/pcie_setup.py` 只是 `setup_pcie.sh` 的入口包装。安装完成后，
-`otpu-setup --check` 检查驱动是否是项目版、是否绑定到 openTPU PCI device、
-设备节点是否存在以及访问权限是否正确；Python 模型运行只使用已经创建好的
-`/dev/xdmaN_*` 节点。
+`opentpu/host/pcie_setup.py` 只是 `setup_pcie.sh` 的入口包装。
+安装完成后，`otpu-setup --check` 检查驱动是否是项目版、是否绑定到 openTPU PCI device、
+设备节点是否存在以及访问权限是否正确；
+Python 模型运行只使用已经创建好的 `/dev/xdmaN_*` 节点。
 
-Python 不直接调用 MXU、VPU 或 sequencer 的 RTL 函数；它通过 XDMA 暴露的两个接口
-与逻辑电路交互：
+Python 不直接调用 MXU、VPU 或 sequencer 的 RTL 函数；
+它通过 XDMA 暴露的两个接口与逻辑电路交互：
 
 1. **控制通路**：`XdmaTransport` 将 `/dev/xdma0_user` 映射为 BAR0，
    `reg_read()`/`reg_write()` 对应 AXI-Lite 寄存器读写。寄存器最终进入 FPGA shell
@@ -621,38 +609,38 @@ decode 时，`Engine` 可以在卡执行当前 program 的同时编译下一个�
 因此卡上的计算由 FPGA 逻辑电路完成，Python 主要负责 tokenizer、编译调度、DMA、
 寄存器控制、logits 读取和采样。
 
-### 5.6 真实卡与 board-sim 的边界
+### 6.3 真实卡与 board-sim 的区别
 
 两者复用 `BoardBackend`、`Board` 和寄存器协议，但 transport 层不同：
 
 | 项目 | `backend=board` | `backend=board-sim` |
 |---|---|---|
 | transport | `XdmaTransport` | `SimTransport` |
-| 控制接口 | `/dev/xdma0_user`、BAR0、AXI-Lite | testbench 中的寄存器脚本 |
-| DRAM | XDMA DMA 到真实 DDR3 | Verilator 内存模型 |
-| 逻辑电路 | FPGA bitstream | `sim/verilator/tb_board.sv` 和 RTL |
+| 控制接口 | `/dev/xdma0_user`、BAR0、AXI-Lite     | testbench 中的寄存器脚本 |
+| DRAM    | XDMA DMA 到真实 DDR3                  | Verilator 内存模型 |
+| 逻辑电路 | FPGA bitstream                       | `sim/verilator/tb_board.sv` 和 RTL |
 | 覆盖范围 | PCIe、XDMA、DDR 校准、host driver、RTL | host driver 协议和 RTL 行为 |
 
 因此 `board-sim` 通过不能证明真实 PCIe、XDMA 驱动、DDR3 校准或物理时序通过；
 真实板卡的结论必须至少经过 `otpu-selftest`、`otpu-diag` 和一次 `backend=board` 模型运行。
 
-## 6. 仿真配置和环境变量
+## 7. 仿真配置和环境变量
 
 仿真配置的默认值在 [`opentpu/isasim.py`](opentpu/isasim.py) 的
 `board_config()` 中，主要环境变量如下：
 
 | 环境变量 | 作用 |
 |---|---|
-| `OTPU_MCOLS` | MXU columns；必须与目标 bitstream/board model 匹配 |
-| `OTPU_LANES` | VPU/TMEM lanes |
-| `OTPU_ACT_ROWS` | ACT RAM rows |
-| `OTPU_PAIR` | 4-bit MM column reuse |
-| `OTPU_DSTEP` | DeltaNet head step |
-| `OTPU_STREAM` | stream engine |
-| `OTPU_NATIVE` | RTL memory path；`ld` 使用 LiteDRAM channel model，`1` 使用 native memory model |
+| `OTPU_MCOLS`       | MXU columns；必须与目标 bitstream/board model 匹配 |
+| `OTPU_LANES`       | VPU/TMEM lanes |
+| `OTPU_ACT_ROWS`    | ACT RAM rows |
+| `OTPU_PAIR`        | 4-bit MM column reuse |
+| `OTPU_DSTEP`       | DeltaNet head step |
+| `OTPU_STREAM`      | stream engine |
+| `OTPU_NATIVE`      | RTL memory path；`ld` 使用 LiteDRAM channel model，`1` 使用 native memory model |
 | `OTPU_UARCH=board` | 使用板卡微架构参数 |
-| `OTPU_AXI=1` | 工具中启用 AXI 路径 |
-| `OTPU_BOOT=1` | 工具中启用板级 boot/load 流程 |
+| `OTPU_AXI=1`       | 工具中启用 AXI 路径 |
+| `OTPU_BOOT=1`      | 工具中启用板级 boot/load 流程 |
 
 例如使用板级 RTL 参数运行测试：
 
@@ -664,9 +652,9 @@ python3 -m pytest -q tests/test_board.py
 不要用环境变量覆盖真实卡能力；真实 `backend=board` 会从 bitstream 的
 `VERSION/CAPS` 寄存器读取 `MCOLS`、`LANES` 和功能位。
 
-## 7. Trace 和性能分析
+## 8. Trace 和性能分析
 
-### 7.1 Lens
+### 8.1 Lens
 
 Lens 可以记录 RTL 或板级模型的执行 trace：
 
@@ -678,13 +666,13 @@ otpu-lens summary qwen.otpuprof
 otpu-lens html qwen.otpuprof -o qwen.html
 ```
 
-`--sim` 使用板级模型；不带 `--sim` 时通常记录 RTL workload。实现和输出格式
-见 [`docs/lens.md`](docs/lens.md)。
+`--sim` 使用板级模型；不带 `--sim` 时通常记录 RTL workload。
+实现和输出格式见 [`docs/lens.md`](docs/lens.md)。
 
-### 7.2 统计数据
+### 8.2 统计数据
 
-`rtlsim.run()` 返回的统计信息可用于分析 cycles、stall、各单元 busy 和 DRAM
-访问。模型/板级运行还可通过 `otpu-smi --sim` 读取模拟寄存器：
+`rtlsim.run()` 返回的统计信息可用于分析 cycles、stall、各单元 busy 和 DRAM访问。
+模型/板级运行还可通过 `otpu-smi --sim` 读取模拟寄存器：
 
 ```sh
 otpu-smi --sim
@@ -693,7 +681,7 @@ otpu-smi --sim
 统计用途应与功能验证分开：ISA 结果正确不代表 RTL 时序、AXI backpressure 或
 板级 memory path 没有问题。
 
-## 8. 推荐使用顺序
+## 9. 推荐使用顺序
 
 遇到一个新 kernel 或新模型时，建议按以下顺序缩小问题范围：
 
@@ -704,21 +692,20 @@ otpu-smi --sim
    验证寄存器、loader、内存通路和主机驱动协议。
 4. **真实卡**：最后使用 `backend=board`，验证 PCIe/XDMA、DDR 校准和实际带宽。
 
-如果只是看算法结果，用 ISA；如果定位 RTL bug，用 RTL；如果验证 host/board
-集成，用 board-sim。不要把 board-sim 的通过结果解释为真实 PCIe、XDMA 或 DDR
-PHY 已经通过硬件验证。
+如果只是看算法结果，用 ISA；如果定位 RTL bug，用 RTL；如果验证 host/board 集成，用 board-sim。
+不要把 board-sim 的通过结果解释为真实 PCIe、XDMA 或 DDR PHY 已经通过硬件验证。
 
-## 9. 常见问题
+## 10. 常见问题
 
 ### Verilator 未安装
 
-RTL 和 board-sim 需要 `verilator`。ISA backend 不需要 Verilator。安装后重新运行
-相同命令即可，`rtlsim.build()` 会按版本和源码内容重新选择缓存。
+RTL 和 board-sim 需要 `verilator`。ISA backend 不需要 Verilator。
+安装后重新运行相同命令即可，`rtlsim.build()` 会按版本和源码内容重新选择缓存。
 
 ### RTL 运行很慢
 
-这是预期行为。减少 `--tokens`、缩短 prompt，或先使用 ISA 验证功能。完整模型的
-RTL 运行适合少量回归和 bit-exact 对比，不适合作为日常聊天后端。
+这是预期行为。减少 `--tokens`、缩短 prompt，或先使用 ISA 验证功能。
+完整模型的 RTL 运行适合少量回归和 bit-exact 对比，不适合作为日常聊天后端。
 
 ### 仿真结果与真实卡不一致
 
@@ -730,5 +717,4 @@ RTL 运行适合少量回归和 bit-exact 对比，不适合作为日常聊天�
 4. DRAM image、运行参数和模型 token；
 5. RTL/board model 是否覆盖了真实硬件的 AXI、LiteDRAM 或 reset 路径。
 
-board-sim 默认不覆盖 PCIe/XDMA 物理链路、DDR PHY 和校准过程，因此这些差异必须
-在真实卡上单独验证。
+board-sim 默认不覆盖 PCIe/XDMA 物理链路、DDR PHY 和校准过程，因此这些差异必须在真实卡上单独验证。

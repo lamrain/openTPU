@@ -74,14 +74,14 @@ kernel 使用 `opentpu.language` 描述，而不是直接写 NumPy 或 PyTorch�
 
 | DSL 操作 | 硬件操作 |
 |---|---|
-| `ol.load()` | DRAM 到 TMEM |
-| `ol.store()` | TMEM 到 DRAM |
-| `ol.quantize()` | TMEM 到 ACT RAM 的 int8 |
-| `ol.dot()` | MXU 矩阵乘法 |
+| `ol.load()`                        | DRAM 到 TMEM |
+| `ol.store()`                       | TMEM 到 DRAM |
+| `ol.quantize()`                    | TMEM 到 ACT RAM 的 int8 |
+| `ol.dot()`                         | MXU 矩阵乘法 |
 | `ol.exp2()`、`ol.max()`、`ol.sum()` | VPU 运算 |
-| `ol.all_gather()` | slice 间数据交换 |
-| `ol.kv_append()` | 量化写入 KV Cache |
-| `ol.range()` | 生成硬件循环 |
+| `ol.all_gather()`                  | slice 间数据交换 |
+| `ol.kv_append()`                   | 量化写入 KV Cache |
+| `ol.range()`                       | 生成硬件循环 |
 
 attention 使用分块和在线 softmax，接近 FlashAttention 的数据流。编译器还会做操作融合，例如：
 
@@ -101,11 +101,11 @@ acc * alpha + dot(...)   -> MM ACC + ASCALE
 
 | 抽象 | 实际位置 | 作用 |
 |---|---|---|
-| `Tensor` | DRAM 中的 fp32 | 普通输入输出 |
-| `QTensor` | DRAM 中的量化权重和 scale | MXU streamed operand |
-| `Tile` | TMEM 中的 fp32 | VPU 和 MXU 输出 |
-| `Stationary` | ACT RAM 中的 int8 | MXU stationary operand |
-| `Bcast` | Tile 的广播视图 | VPU 行列广播 |
+| `Tensor`     | DRAM 中的 fp32          | 普通输入输出 |
+| `QTensor`    | DRAM 中的量化权重和 scale | MXU streamed operand |
+| `Tile`       | TMEM 中的 fp32          | VPU 和 MXU 输出 |
+| `Stationary` | ACT RAM 中的 int8       | MXU stationary operand |
+| `Bcast`      | Tile 的广播视图          | VPU 行列广播 |
 
 在 openTPU 中，layout transition 就是一条硬件指令：
 
@@ -115,7 +115,7 @@ TMEM -> ACT RAM              QACT
 ACT RAM + DRAM weight        MM
 TMEM -> DRAM                 ST
 TMEM -> DRAM quantized       QST
-slice 间复制                 GATHER
+slice 间复制                  GATHER
 ```
 
 地址使用 `Affine` 表达，可包含常量、硬件循环变量和运行时参数。编译器负责：
@@ -164,7 +164,7 @@ opentpu/isasim.py
         寄存器 / PC / IMEM / DRAM / TMEM / ACT RAM / DMA / scoreboard
 ```
 
-`opentpu/isa.py` 主要回答“指令长什么样、如何生成和编码”：
+`opentpu/isa.py` 主要回答“指令长什么样、如何生成和编码”，推测会根据这个文件将模型转成指令：
 
 - 定义指令和操作数的数据结构、opcode、flags 以及地址/shape 字段；
 - 提供 `Instr`、opcode 构造函数等指令抽象；编译器的 `Program` 容器定义在
@@ -173,7 +173,7 @@ opentpu/isasim.py
 - 提供反汇编、解码和调试辅助，使同一条指令可以被检查和打印；
 - 提供 `I.ld()`、`I.mm()`、`I.vop()`、`I.halt()` 等面向编译器和测试的构造函数。
 
-`opentpu/isasim.py` 主要回答“指令如何改变设备状态”：
+`opentpu/isasim.py` 主要回答“指令如何改变设备状态”，推测用于模拟硬件指令：
 
 - `Config` 描述 slice、MXU、TMEM、ACT RAM、IMEM 和 DRAM 容量；
 - `Machine` 管理一个或多个 slice，执行程序并返回最终内存和统计结果；
@@ -193,18 +193,17 @@ opentpu/isasim.py
         -> isasim.Machine(...).run()
 ```
 
-这里 `isa.py` 负责生成和编码程序，`isasim.py` 负责执行程序；前者不运行模型，
-后者通常也不重新编译 kernel。RTL 和真实 FPGA 则复用由 `isa.py` 编码出的同一份
-program 和相同的 DRAM image：RTL 由 SystemVerilog sequencer 执行，FPGA 由真实
-sequencer 执行，`isasim.py` 作为 Python 参考执行器执行。
+这里 `isa.py` 负责生成和编码程序，`isasim.py` 负责执行程序；前者不运行模型，后者通常也不重新编译 kernel。
+RTL 和真实 FPGA 则复用由 `isa.py` 编码出的同一份 program 和相同的 DRAM image：
+RTL 由 SystemVerilog sequencer 执行，FPGA 由真实 sequencer 执行，`isasim.py` 作为 Python 参考执行器执行。
 
 因此三者的职责可以概括为：
 
 | 层 | 使用模块 | 作用 |
 |---|---|---|
-| 指令定义/编码 | `opentpu/isa.py` | 规定 ISA 程序的结构和二进制表示 |
-| Python 执行模型 | `opentpu/isasim.py` | 在 CPU 上执行 ISA，模拟设备状态和数值语义 |
-| 硬件执行 | RTL / FPGA sequencer | 执行同一份 ISA word，验证硬件实现是否一致 |
+| 指令定义/编码    | `opentpu/isa.py`     | 规定 ISA 程序的结构和二进制表示 |
+| Python 执行模型 | `opentpu/isasim.py`  | 在 CPU 上执行 ISA，模拟设备状态和数值语义 |
+| 硬件执行        | RTL / FPGA sequencer | 执行同一份 ISA word，验证硬件实现是否一致 |
 
 主要指令类别：
 
@@ -236,7 +235,7 @@ GATHER
 
 因此 ISA simulator 同时承担快速功能模型、设备侧 golden、RTL 对照基准和板卡验证基准的角色。
 
-## 8. RTL 与 Verilator
+## 8. RTL 与 Verilator (推测是 backend=rtl 的描述)
 
 RTL 顶层是 `rtl/top/otpu_top.sv`，下面连接多个 `otpu_slice` 和 `otpu_coll`。一个 slice 包含：
 
@@ -265,7 +264,7 @@ AXI=2：接近板卡 LiteDRAM channel 的模型
 
 ## 9. FPGA 板卡和 Host
 
-板卡顶层为 `rtl/boards/ypcb-00338/otpu_board.sv`，主机实现集中在 `opentpu/host/board.py`、`regs.py` 和 `runstate.py`。
+板卡顶层为 `rtl/boards/ypcb-00338/otpu_board.sv`。
 
 板卡连接关系：
 
@@ -330,7 +329,8 @@ resident decode 模式下，同一个程序可以通过参数寄存器接收 tok
 
 ### 简短结论
 
-如果问的是**实现规模、模块数量和时序/接口细节**，RTL 更复杂；如果问的是**跨层抽象、模型适配和系统行为**，软件栈更复杂。综合整个工程，软件栈的系统性复杂度略高，RTL 的局部实现难度和验证成本更高。
+如果问的是**实现规模、模块数量和时序/接口细节**，RTL 更复杂；如果问的是**跨层抽象、模型适配和系统行为**，软件栈更复杂。
+综合整个工程，软件栈的系统性复杂度略高，RTL 的局部实现难度和验证成本更高。
 
 ### RTL 的复杂性
 
@@ -362,18 +362,19 @@ RTL 的难点集中在硬件约束和精确时序：
 
 | 维度 | RTL | 软件栈 |
 |---|---|---|
-| 主要难点 | 时序、握手、资源、协议、复位 | 抽象、模型映射、布局、编译和后端一致性 |
-| 复杂性类型 | 局部深、周期敏感 | 跨层广、语义耦合强 |
-| 调试成本 | 很高，常需 Verilator、波形、综合和板卡验证 | 很高，常需 ISA/RTL/CPU golden/板卡交叉验证 |
-| 变化影响 | 改动可能影响 fmax、面积和协议 | 改动可能影响多个模型、权重格式和后端 |
-| 代码可读性 | 低层细节多，理解成本高 | 抽象层多，但 Python/DSL 相对易读 |
-| 运行时风险 | 周期、死锁、数据损坏、时序不收敛 | 编译失败、地址错误、数值偏差、性能退化 |
+| 主要难点   | 时序、握手、资源、协议、复位               | 抽象、模型映射、布局、编译和后端一致性 |
+| 复杂性类型 | 局部深、周期敏感                         | 跨层广、语义耦合强 |
+| 调试成本   | 很高，常需 Verilator、波形、综合和板卡验证 | 很高，常需 ISA/RTL/CPU golden/板卡交叉验证 |
+| 变化影响   | 改动可能影响 fmax、面积和协议             | 改动可能影响多个模型、权重格式和后端 |
+| 代码可读性 | 低层细节多，理解成本高                    | 抽象层多，但 Python/DSL 相对易读 |
+| 运行时风险 | 周期、死锁、数据损坏、时序不收敛            | 编译失败、地址错误、数值偏差、性能退化 |
 
 ### 最终判断
 
 这个工程中，**RTL 是最难做对的部分，软件栈是最难做全的部分**。
 
-如果只看硬件核心 datapath，RTL 的局部复杂度更高；如果把模型支持、量化、编译器、模拟器、host、板卡后端和验证工具全部算上，软件栈的总体系统复杂度略高。两者不是替代关系，而是通过 ISA 强耦合：ISA 越简单，编译器和 kernel 需要承担的布局工作越多；硬件越强，RTL 的时序和资源压力越大。
+如果只看硬件核心 datapath，RTL 的局部复杂度更高；如果把模型支持、量化、编译器、模拟器、host、板卡后端和验证工具全部算上，软件栈的总体系统复杂度略高。
+两者不是替代关系，而是通过 ISA 强耦合：ISA 越简单，编译器和 kernel 需要承担的布局工作越多；硬件越强，RTL 的时序和资源压力越大。
 
 ## 13. 推荐阅读顺序
 
