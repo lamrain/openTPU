@@ -1,6 +1,7 @@
 # openTPU RTL 层级
 
-本文从 [`rtl/top/otpu_top.sv`](rtl/top/otpu_top.sv) 出发，梳理核心 RTL 的模块层级和对应源文件。这里的“层级”指 SystemVerilog module 的实例化关系；同一个 `.sv` 文件可以定义多个可复用的 module。
+本文从 [`rtl/top/otpu_top.sv`](rtl/top/otpu_top.sv) 出发，梳理核心 RTL 的模块层级和对应源文件。
+这里的“层级”指 SystemVerilog module 的实例化关系；同一个 `.sv` 文件可以定义多个可复用的 module。
 
 ## 1. 总体树
 
@@ -46,10 +47,11 @@ otpu_top                                      rtl/top/otpu_top.sv
 ```
 
 `S` 个 slice 共享 top 级 collective 接口，但每个 slice 拥有自己的 sequencer、
-DMA、TMEM、ACT RAM、MXU 和 VPU。`otpu_top` 只负责把这些单元连接起来，并选择
-DRAM/collective 实现；具体指令执行由 `otpu_seq` 和各执行单元完成。
-`otpu_coll_hub` 和 `otpu_coll_port` 不属于 `otpu_top` 的子树，它们只在
-`rtl/shell/otpu_board.sv` 的板级 collective 路径中出现。
+DMA、TMEM、ACT RAM、MXU 和 VPU。
+`otpu_top` 只负责把这些单元连接起来，并选择 DRAM/collective 实现；
+具体指令执行由 `otpu_seq` 和各执行单元完成。
+`otpu_coll_hub` 和 `otpu_coll_port` 不属于 `otpu_top` 的子树，
+它们只在 `rtl/shell/otpu_board.sv` 的板级 collective 路径中出现。
 
 ## 2. 根模块：`otpu_top`
 
@@ -63,23 +65,22 @@ DRAM/collective 实现；具体指令执行由 `otpu_seq` 和各执行单元完�
 - 汇总 `all_halted`、`any_error` 和每个 slice 的 `icount`；
 - 向 testbench 提供程序加载、运行参数、DRAM 和状态接口。
 
-### DRAM 条件分支
+### DRAM 条件分支（推测都是仿真用）
 
 | 参数 | 文件 | 用途 |
 | `AXI=0` | `rtl/mem/otpu_dram.sv`                                            | 固定延迟的行为级 DRAM 模型 |
 | `AXI=1` | `rtl/mem/otpu_native_dram.sv`、`sim/verilator/otpu_native_mem.sv` | native memory adapter 加延迟模型 |
 | `AXI=2` | `rtl/mem/otpu_native_dram.sv`、`sim/verilator/otpu_ldc_mem.sv`    | 接近 LiteDRAM channel 的仿真路径 |
 
-`otpu_native_dram`、`otpu_native_mem` 和 `otpu_ldc_mem` 都是 `otpu_top` 的同级
-实例：前者是 openTPU memory request 与 native memory channel 之间的 adapter，
-后两者按 `AXI` 参数二选一，提供仿真的 memory backend。它们通过 native channel
-信号连接；`otpu_native_dram` 本身不是 DDR controller。
+`otpu_native_dram`、`otpu_native_mem` 和 `otpu_ldc_mem` 都是 `otpu_top` 的同级实例：
+前者是 openTPU memory request 与 native memory channel 之间的 adapter，
+后两者按 `AXI` 参数二选一，提供仿真的 memory backend。
+它们通过 native channel 信号连接；`otpu_native_dram` 本身不是 DDR controller。
 
 ### Collective 条件分支
 
 - `COLL_GATHER=1`：实例化 `otpu_coll`，支持 slice 间 gather/read/write。
-- `COLL_GATHER=0`：实例化 `otpu_coll_bar`，只保留 barrier 风格路径，通常用于
-  单 slice 或板卡受限配置。
+- `COLL_GATHER=0`：实例化 `otpu_coll_bar`，只保留 barrier 风格路径，通常用于单 slice 或板卡受限配置。
 
 ## 3. Slice 层：`otpu_slice`
 
@@ -134,11 +135,11 @@ Sequencer 使用的技术 RAM wrapper 来自技术映射文件，具体见第 8 
 
 文件：[rtl/mem/otpu_tmem.sv](rtl/mem/otpu_tmem.sv)
 
-TMEM 是 VPU/MXU 共享的 fp32 tile memory。该文件还包含与具体实现相关的 helper
-module，例如：
+TMEM 是 VPU/MXU 共享的 fp32 tile memory。
+该文件还包含与具体实现相关的 helper module，例如：
 
-- `otpu_pump_bank`：pumped/sub-bank 访问路径；双频 TMEM 时钟由 `clk_f` 和相关
-  时序约束支持，但 `otpu_clk2x` 不是一个 RTL module；
+- `otpu_pump_bank`：pumped/sub-bank 访问路径；
+  双频 TMEM 时钟由 `clk_f` 和相关时序约束支持，但 `otpu_clk2x` 不是一个 RTL module；
 - `otpu_ram_1r1w`、`otpu_ram_1rw1r`：RAM wrapper。
 
 实际启用哪些 helper 由 `TMEM_IMPL`、`TMEM_TDP`、`TMEM_PMP`、`TMEM_RQ` 等参数决定。
@@ -147,8 +148,8 @@ module，例如：
 
 文件：[rtl/mem/otpu_actram.sv](rtl/mem/otpu_actram.sv)
 
-保存 MXU 的 stationary activation 和对应 scale。不同 FPGA/ASIC 技术映射下，
-底层 RAM wrapper 可来自 generic、ASIC 或 Xilinx 技术文件。
+保存 MXU 的 stationary activation 和对应 scale。
+不同 FPGA/ASIC 技术映射下，底层 RAM wrapper 可来自 generic、ASIC 或 Xilinx 技术文件。
 
 ## 5. MXU 层
 
@@ -172,9 +173,8 @@ DRAM weight stream + ACT RAM stationary data
 - `otpu_skew`：lane/column 数据 skew 和延迟；
 - `otpu_delay`：流水线延迟。
 
-MXU 还复用 `rtl/vpu/otpu_fpipe.sv` 中的浮点流水线 module，以及技术 DSP 文件中
-的 `otpu_pe`、`otpu_mxce`。`MXU_IMPL` 和 `CL` 参数决定使用 adder tree 还是
-DSP cascade 等实现。
+MXU 还复用 `rtl/vpu/otpu_fpipe.sv` 中的浮点流水线 module，以及技术 DSP 文件中的 `otpu_pe`、`otpu_mxce`。
+`MXU_IMPL` 和 `CL` 参数决定使用 adder tree 还是 DSP cascade 等实现。
 
 ## 6. VPU 和量化层
 
@@ -182,20 +182,17 @@ DSP cascade 等实现。
 
 文件：[rtl/vpu/otpu_vpu.sv](rtl/vpu/otpu_vpu.sv)
 
-VPU 是 slice 的 fp32 向量执行单元，负责 VOP、向量 load/store、广播、归约和
-特殊函数流水线。它连接以下子模块：
+VPU 是 slice 的 fp32 向量执行单元，负责 VOP、向量 load/store、广播、归约和特殊函数流水线。它连接以下子模块：
 
 - `otpu_vtree`：[rtl/vpu/otpu_vtree.sv](rtl/vpu/otpu_vtree.sv)，向量树形归约；
-- `otpu_se_comp`：[rtl/vpu/otpu_se_comp.sv](rtl/vpu/otpu_se_comp.sv)，复合特殊函数
-  的控制/计算路径；
-- `otpu_se_tail`：[rtl/vpu/otpu_se_tail.sv](rtl/vpu/otpu_se_tail.sv)，特殊函数尾段、
-  DeltaNet step 等路径；
+- `otpu_se_comp`：[rtl/vpu/otpu_se_comp.sv](rtl/vpu/otpu_se_comp.sv)，复合特殊函数的控制/计算路径；
+- `otpu_se_tail`：[rtl/vpu/otpu_se_tail.sv](rtl/vpu/otpu_se_tail.sv)，特殊函数尾段、DeltaNet step 等路径；
 - `rtl/vpu/otpu_fpipe.sv` 中的 `otpu_fadd`、`otpu_fadd2`、`otpu_fmul`、
   `otpu_fmadd`、`otpu_fmma`、`otpu_delay`；
 - `rtl/vpu/otpu_fp.sv` 中的 fp32 package/function 定义。
 
-`otpu_se_comp` 和 `otpu_se_tail` 是 `otpu_vpu` 的可选特殊函数路径，是否启用由
-`HAS_SE`、`HAS_SS`、模型/bitstream 参数决定。
+`otpu_se_comp` 和 `otpu_se_tail` 是 `otpu_vpu` 的可选特殊函数路径，
+是否启用由 `HAS_SE`、`HAS_SS`、模型/bitstream 参数决定。
 
 ### `otpu_quant`
 
@@ -221,28 +218,26 @@ otpu_board
 └── otpu_coll_port[S]
 ```
 
-`otpu_coll_hub` 负责多个 slice 的请求仲裁、读数据广播、写数据路由和 gather
-协调；`otpu_coll_port` 把 collective 请求接到每个 slice 的 TMEM/接口。它们的
-父模块是 `rtl/shell/otpu_board.sv`，不是 `otpu_coll`。
+`otpu_coll_hub` 负责多个 slice 的请求仲裁、读数据广播、写数据路由和 gather 协调；
+`otpu_coll_port` 把 collective 请求接到每个 slice 的 TMEM/接口。
+它们的父模块是 `rtl/shell/otpu_board.sv`，不是 `otpu_coll`。
 
-当 `COLL_GATHER=0` 时只使用同一文件中的 `otpu_coll_bar`，用于 barrier-only
-配置，不实例化 hub/port gather 数据路径。
+当 `COLL_GATHER=0` 时只使用同一文件中的 `otpu_coll_bar`，
+用于 barrier-only 配置，不实例化 hub/port gather 数据路径。
 
 ## 8. 技术映射和可替换实现
 
-核心 wrapper module 不一定直接绑定某一种 FPGA primitive。构建目标会选择不同的
-技术文件：
+核心 wrapper module 不一定直接绑定某一种 FPGA primitive。构建目标会选择不同的技术文件：
 
 | 文件 | 主要 module | 用途 |
 |---|---|---|
-| `rtl/tech/generic/otpu_tech_ram.sv` | `otpu_ram_1r1w`、`otpu_ram_1rw`、`otpu_ram_1rw1r` | 通用仿真/综合 RAM |
-| `rtl/tech/asic/otpu_tech_ram.sv` | 同名 RAM wrapper | ASIC memory macro/综合映射 |
-| `rtl/tech/generic/otpu_tech_dsp.sv` | `otpu_pe`、`otpu_mxce` | 通用乘法器/DSP model |
-| `rtl/tech/xilinx7/otpu_tech_dsp.sv` | `otpu_pe`、`otpu_mxce` | 7-series Xilinx DSP48 映射 |
-| `rtl/tech/xilinxus/otpu_tech_dsp.sv` | `otpu_pe`、`otpu_mxce` | UltraScale/UltraScale+ DSP 映射 |
+| `rtl/tech/generic/otpu_tech_ram.sv`  | `otpu_ram_1r1w`、`otpu_ram_1rw`、`otpu_ram_1rw1r` | 通用仿真/综合 RAM |
+| `rtl/tech/asic/otpu_tech_ram.sv`     | 同名 RAM wrapper                                  | ASIC memory macro/综合映射 |
+| `rtl/tech/generic/otpu_tech_dsp.sv`  | `otpu_pe`、`otpu_mxce`                            | 通用乘法器/DSP model |
+| `rtl/tech/xilinx7/otpu_tech_dsp.sv`  | `otpu_pe`、`otpu_mxce`                            | 7-series Xilinx DSP48 映射 |
+| `rtl/tech/xilinxus/otpu_tech_dsp.sv` | `otpu_pe`、`otpu_mxce`                            | UltraScale/UltraScale+ DSP 映射 |
 
-这些技术文件通常不能同时编译，因为它们定义了同名 module。具体 Makefile/Vivado
-目标决定采用哪一套。
+这些技术文件通常不能同时编译，因为它们定义了同名 module。具体 Makefile/Vivado 目标决定采用哪一套。
 
 ## 9. FPGA 层级
 
@@ -270,19 +265,18 @@ otpu_fpga_top_ld                         rtl/boards/ypcb-00338/otpu_fpga_top_ld.
 └── board I/O                            clock / reset / I2C / GPIO / transceiver
 ```
 
-`otpu_fpga_top_ld.sv` 还包含板级时钟缓冲、I/O buffer、生成的 Vivado block design
-和 LiteDRAM 连接；这些不是 `otpu_top` core 的子模块。
-`otpu_native_sys.sv` 是板级 native memory/system wrapper，直接实例化 `otpu_board`、`otpu_dma_split` 和两个
-`otpu_mem_ch`，负责把 XDMA/board shell 的 native channel 接到实际的 DDR/AXI 系统。
+`otpu_fpga_top_ld.sv` 还包含板级时钟缓冲、I/O buffer、生成的 Vivado block design 和 LiteDRAM 连接。
+`otpu_native_sys.sv` 是板级 native memory/system wrapper，
+直接实例化 `otpu_board`、`otpu_dma_split` 和两个 `otpu_mem_ch`，
+负责把 XDMA/board shell 的 native channel 接到实际的 DDR/AXI 系统。
 
 具体的 `otpu_bd_wrapper` 和 `otpu_litedram` 端口来自 Vivado 生成文件，非手写的 RTL。
 真实板卡路径不经过 `otpu_top`；`otpu_top` 是仿真/核心集成顶层，而板级 shell 直接复用 `otpu_slice`。
 
 ### 9.1.1 `otpu_bd_wrapper`：PCIe/XDMA 与 FPGA 基础设施边界
 
-`otpu_bd_wrapper` 不是 openTPU 的计算 RTL module，而是 Vivado Block Design
-生成的 HDL wrapper。它把多个 Xilinx/板卡 IP 核封装成 `otpu_fpga_top_ld.sv` 可以
-连接的端口。其主要职责是：
+`otpu_bd_wrapper` 不是 openTPU 的计算 RTL module，而是 Vivado Block Design 生成的 HDL wrapper。
+它把多个 Xilinx/板卡 IP 核封装成 `otpu_fpga_top_ld.sv` 可以连接的端口。其主要职责是：
 
 ```text
 PCIe edge / XDMA IP
@@ -304,13 +298,13 @@ otpu_litedram IP
 - XDMA、控制 AXI、core clock 和 LiteDRAM controller 所需的时钟与复位；
 - PCIe link、DMA 和 block-design 状态信号。
 
-因此可以把它理解为 **PCIe/XDMA IP 与 openTPU 手写 RTL 之间的集成边界**，但不能
-把 `otpu_bd_wrapper` 本身当作一个可阅读的 openTPU RTL datapath。它的内部层级由
-Vivado `.bd`、IP 配置和生成 HDL 决定，通常不在 `rtl/` 中维护。
+因此可以把它理解为 **PCIe/XDMA IP 与 openTPU 手写 RTL 之间的集成边界**，
+但不能把 `otpu_bd_wrapper` 本身当作一个可阅读的 openTPU RTL datapath。
+它的内部层级由 Vivado `.bd`、IP 配置和生成 HDL 决定，通常不在 `rtl/` 中维护。
 
-`otpu_fpga_top_ld.sv` 的职责是把生成 wrapper、LiteDRAM、板级 I/O 和
-`otpu_native_sys` 接起来；`otpu_native_sys.sv` 再把 XDMA memory path 分到两个
-`otpu_mem_ch`，并把控制/执行路径接到 `otpu_board`。相应的 Vivado 工程文件位于：
+`otpu_fpga_top_ld.sv` 的职责是把生成 wrapper、LiteDRAM、板级 I/O 和 `otpu_native_sys` 接起来；
+`otpu_native_sys.sv` 再把 XDMA memory path 分到两个 `otpu_mem_ch`，并把控制/执行路径接到 `otpu_board`。
+相应的 Vivado 工程文件位于：
 
 - `boards/ypcb-00338/vivado/create_project.tcl`：
   添加 RTL/IP source、设置 FPGA top 和生成工程；
@@ -319,9 +313,9 @@ Vivado `.bd`、IP 配置和生成 HDL 决定，通常不在 `rtl/` 中维护。
 - `boards/ypcb-00338/litedram/`：
   LiteDRAM 生成的 controller HDL、配置和约束。
 
-离线 lint 使用的 `boards/ypcb-00338/sim/otpu_bd_ld_wrapper_stub.sv` 只是生成
-wrapper 的行为 stub，用来检查 `otpu_fpga_top_ld.sv` 的端口连接；它不等价于真实
-PCIe/XDMA IP，也不能验证 PCIe link、DMA engine 或 DDR3 PHY。
+离线 lint 使用的 `boards/ypcb-00338/sim/otpu_bd_ld_wrapper_stub.sv` 
+只是生成 wrapper 的行为 stub，用来检查 `otpu_fpga_top_ld.sv` 的端口连接；
+它不等价于真实 PCIe/XDMA IP，也不能验证 PCIe link、DMA engine 或 DDR3 PHY。
 
 ### 9.2 寄存器层级和配置路径
 
@@ -344,12 +338,10 @@ Host Python / Xilinx XDMA
 ```
 
 寄存器地址和 bit mask 的软件镜像在 [`opentpu/host/regs.py`](opentpu/host/regs.py)。
-`otpu_axil_iso` 和硬件寄存器的实现都位于
-[`rtl/shell/otpu_ctrl.sv`](rtl/shell/otpu_ctrl.sv)，其中：
+`otpu_axil_iso` 和硬件寄存器的实现都位于 [`rtl/shell/otpu_ctrl.sv`](rtl/shell/otpu_ctrl.sv)，其中：
 
 - `otpu_axil_iso` 隔离 XDMA/AXI-Lite master reset 与 core/register slave reset，
-  保证 reset 期间已经进入的读写事务能够完成或被丢弃，不把半个 AXI-Lite transaction
-  传给寄存器 bank；
+  保证 reset 期间已经进入的读写事务能够完成或被丢弃，不把半个 AXI-Lite transaction 传给寄存器 bank；
 - `otpu_ctrl` 执行寄存器地址解码、状态汇总和控制信号生成：
   - `VERSION`、`CAPS`、`BUILD_ID` 描述当前 bitstream 的能力和构建信息；
   - `CTRL` 接收 reset、load、run、stop 等主机控制；
@@ -402,7 +394,7 @@ core 内部仍然只看到 module parameter 和端口，例如：
 
 ## 10. 仿真 testbench 层
 
-常见 Verilator testbench 不属于 `otpu_top` 的子模块，但会实例化并驱动它：
+Verilator testbench 实例化并驱动 `otpu_top` ：
 
 ```text
 tb_top.sv
@@ -411,9 +403,9 @@ tb_top.sv
     -> dump DRAM/TMEM/status
 ```
 
-`sim/verilator/otpu_native_mem.sv` 和 `sim/verilator/otpu_ldc_mem.sv` 是
-`AXI=1/2` 时被 `otpu_top` 条件引用的仿真 memory backend，属于构建支持文件，不是
-FPGA 板卡的真实 DDR controller。
+`sim/verilator/otpu_native_mem.sv` 和 `sim/verilator/otpu_ldc_mem.sv` 
+是 `AXI=1/2` 时被 `otpu_top` 条件引用的仿真 memory backend，属于构建支持文件，
+不是 FPGA 板卡的真实 DDR controller。
 
 ## 11. 源文件索引
 
@@ -437,14 +429,11 @@ FPGA 板卡的真实 DDR controller。
 
 ## 12. 阅读和验证方法
 
-查看一个实例的具体端口连接时，先定位父 module 的实例声明，再跳到目标文件的
-`module` 定义。例如：
+查看一个实例的具体端口连接时，先定位父 module 的实例声明，再跳到目标文件的 `module` 定义。例如：
 
 ```sh
 rg -n "otpu_slice|otpu_mxu|otpu_vpu" rtl/top/otpu_top.sv rtl/top/otpu_slice.sv
 rg -n "^module |u_[a-zA-Z0-9_]+" rtl/top rtl/seq rtl/mem rtl/mxu rtl/vpu
 ```
 
-实际编译层级还取决于参数（`AXI`、`COLL_GATHER`、`TMEM_IMPL`、`MXU_IMPL`、
-`HAS_SE` 等）和目标的 source list；因此本文同时列出条件分支与文件位置，而不是
-把所有实验目录的 module 当成 `otpu_top` 的实例。
+实际编译层级还取决于参数（`AXI`、`COLL_GATHER`、`TMEM_IMPL`、`MXU_IMPL`、`HAS_SE` 等）和目标的 source list。

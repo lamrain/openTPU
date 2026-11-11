@@ -454,17 +454,29 @@ class SimTransport:
     """The Verilator model of the board (sim/verilator/tb_board.sv): the memory lives here as
     the channels' physical images (two per slice of `target`'s build), register operations are
     queued and replayed by the testbench when a result is needed (a flush).
+    板卡的Verilator模型(sim/verilator/tb_board.sv): 内存以
+    通道的物理映像形式存在于此（`target`构建中的每个切片有两个），寄存器操作会被
+    排队，并在需要结果时（即刷新时）由测试平台重放。
 
     Every flush is a fresh simulation: DRAM persists (through the channel image files), but the
     control registers, IMEM and TMEM start from reset. The Board protocol is built for that --
     a program load, its run and the reads of its counters happen in one flush -- and the Qwen3
     step programs do not rely on TMEM surviving between runs.
+    每次刷新都是一次全新的仿真: DRAM 数据会保留（通过通道映像文件），但
+    控制寄存器、IMEM 和 TMEM 会从复位状态开始。板级协议正是为此而设计的，
+    程序加载、运行及其计数器的读取都在一次刷新中完成。而 Qwen3
+    步进程序并不依赖 TMEM 在运行之间保持数据。
 
     Batched use (batched = True): queue_read() queues a read and returns its index in the next
     flush's `results` (reads keep their order and may repeat an address); wait_cycles(n) queues
     the testbench's `C` command (wait n core cycles). Together they sample the free-running
     counters twice in one simulation (otpu-smi --sim) and read the trace buffer out in the flush
-    that ran the program."""
+    that ran the program.
+    批处理模式(batched = True): queue_read() 将一次读取操作加入队列，并返回其在下次
+    刷新操作的 `results` 中的索引(读取操作保持原有顺序，且可能重复出现同一地址), wait_cycles(n) 将
+    测试平台中的 `C` 命令加入队列(等待 n 个核心周期)。二者共同在一次仿真(otpu-smi --sim)中对自由运行的
+    计数器进行两次采样，并在运行该程序的刷新操作中读取跟踪缓冲区。
+    """
 
     batched = True
     devname = None              # private to this process: no device lock

@@ -8,7 +8,7 @@ openTPU 的软件栈是一条从 Hugging Face 模型到 FPGA 指令的完整链�
 Hugging Face 模型/权重
         |
         v
-opentpu.llm          模型结构、权重读取、KV Cache、decode/prefill
+opentpu.llm          Spec + Engine: 模型 image、权重/KV cache、prefill/decode 编排        
         |
         v
 opentpu.kernels      attention、MLP、RoPE、RMSNorm、DeltaNet 等算子
@@ -22,18 +22,11 @@ opentpu.compiler     内存布局、Affine 地址、寄存器分配、循环和�
         v
 8 x 32-bit openTPU ISA
         |
-        +------------------+
-        |                  |
-        v                  v
-opentpu.isasim       Verilator RTL
-Python 位精确模拟器   SystemVerilog 硬件模型
-        |                  |
-        +--------+---------+
-                 v
-        ISA simulator / RTL / FPGA board
-                 |
-                 v
-        host/board.py + PCIe XDMA
+        +------------------+------------------+
+        |                  |                  |
+        v                  v                  v
+opentpu.isasim       Verilator RTL   board.py + PCIe XDMA
+Python 位精确模拟器    SV 硬件模型      FPGA BoardBackend
 ```
 
 核心思想是：硬件不负责复杂的动态调度，软件显式生成数据搬运和计算指令。因此，程序的执行轨迹能够直接解释性能。

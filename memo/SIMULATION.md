@@ -64,6 +64,34 @@ runtime 的核心实现是 [`opentpu/runtime.py`](opentpu/runtime.py)，其中�
 模型层的 backend 选择以 [`opentpu/llm/qwen3.py`](opentpu/llm/qwen3.py) 的 `Engine` 为例；
 LFM2、Qwen3.5、Gemma 4 等模型在各自的 `opentpu/llm/*.py` 中复用同一套协议。
 
+`Engine` 依据当前位置执行 prefill/decode，把 kernel 编译成 ISA program，
+然后通过所选 backend 的统一 `run()` 或 `start()/wait()` 接口提交执行。
+以一条 VOP（例如逐元素 ADD）为例：
+
+```text
+Engine.step() / Engine._run_rows() （初始化时根据 backend == "isa"，创建 IsaBackend）
+    -> compile_step() / compile_rows()
+        -> compiler 调用 isa.vop(V_ADD, ...) 生成 Instr(op=VOP)
+    -> backend.run(programs)
+       ├── backend=isa
+       │     -> IsaBackend.run()
+       │     -> Machine.load(programs).run()
+       │     -> Machine 调度 Slice.step() （循环调度 slice）
+       │     -> Slice.execute(ins) （ISA interpreter 的单条指令分派器）
+       │     -> Slice._vop(ins) -> F.add(A, B) -> 通过 tput() 写回 TMEM
+       └── backend=board
+             -> BoardBackend.run()/start()
+             -> Board.load_program() / 写入参数 / CTRL.RUN
+             -> FPGA otpu_seq 解码并发射 VOP
+             -> otpu_slice.u_vpu 执行向量运算
+             -> STATUS.HALTED 后 host 读取 logits/结果
+```
+
+`Slice.execute()` 和 `_vop()` 是 ISA simulator 的 Python 指令解释器，只会在 `backend=isa` 分支调用。
+`backend=board` 时，Python 负责上传 ISA program 和控制运行；
+VOP 的硬件执行发生在 FPGA 的 `otpu_seq -> otpu_vpu` 路径中，不会调用 Python 的 `Slice.execute()`。
+RTL 仿真也类似，由 SystemVerilog sequencer 和 VPU 执行同一 ISA。
+
 ## 3. ISA 功能仿真 (backend=isa)
 
 ### 3.1 实现和入口
@@ -270,6 +298,7 @@ python3 tools/validate.py ...
 
 ### 5.1 结构
 
+仿真的 Python 封装依然位于 [`opentpu/rtlsim.py`](opentpu/rtlsim.py)。
 板级 testbench 是 [`sim/verilator/tb_board.sv`](sim/verilator/tb_board.sv)。
 它实例化 `otpu_board`，并通过 host script 模拟 AXI-Lite 控制访问：
 
