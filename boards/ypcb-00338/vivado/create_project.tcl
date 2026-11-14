@@ -6,6 +6,12 @@
 # OUT_DIR: default ../../../build/vivado (repository build/).
 # BUILD_ID: 8 hex digits for the BUILD_ID register (default: the first 8 hex digits of the
 # repository's git commit, else 0).
+# 为 YPCB-00338 上的 openTPU 创建 Vivado 项目：LiteDRAM 内核
+# (boards/ypcb-00338/litedram/)，每个通道均位于 otpu_mem_ch 之后（bd_native.tcl、otpu_fpga_top_ld）。
+# 默认设置为 MCOLS=4 并构建 systolic MXU。
+# DDR_SPEED：仅限 1066（LiteDRAM 内核是为 DDR3-1066 生成的：tools/litedram/gen_core.py）。
+# OUT_DIR：默认值 ../../../build/vivado（仓库 build/）。
+# BUILD_ID：用于 BUILD_ID 寄存器的 8 位十六进制数字（默认值：仓库 git 提交记录的前 8 位十六进制数字，否则为 0）。
 
 set here [file normalize [file dirname [info script]]]
 set root [file normalize $here/../../..]
@@ -101,6 +107,8 @@ set_property default_lib xil_defaultlib [current_project]
 # ---- RTL (SystemVerilog): the accelerator (otpu_board, its DRAM adapter otpu_native_dram), the
 # channels' native ports (one otpu_mem_ch per channel, XDMA's split: otpu_native_sys), the top and
 # the generated LiteDRAM core (Verilog)
+# ---- RTL（SystemVerilog）：加速器（otpu_board 及其 DRAM 适配器 otpu_native_dram）、
+# 各通道的原生端口（每个通道一个 otpu_mem_ch，XDMA 的拆分：otpu_native_sys）、顶层以及生成的 LiteDRAM 内核（Verilog）
 set rtl [list \
   rtl/vpu/otpu_fp.sv rtl/vpu/otpu_fpipe.sv rtl/top/otpu_pkg.sv \
   rtl/mem/otpu_tmem.sv rtl/mem/otpu_actram.sv \
@@ -116,13 +124,15 @@ set rtl [list \
 add_files -norecurse $root/boards/ypcb-00338/litedram/otpu_litedram.v
 # the core's identifier ROM ("openTPU LiteDRAM"), which the Verilog $readmemh's by file name:
 # synthesis finds it as a project file
+# Core 的标识符 ROM（“openTPU LiteDRAM”），Verilog 中的 $readmemh 会根据文件名读取该 ROM：
+# 综合阶段将其识别为项目文件
 add_files -norecurse $root/boards/ypcb-00338/litedram/otpu_litedram_mem.init
 set_property FILE_TYPE {Memory Initialization Files} [get_files otpu_litedram_mem.init]
 foreach f $rtl {
   add_files -norecurse $root/$f
   set_property file_type SystemVerilog [get_files $root/$f]
 }
-# SYNTHESIS removes the simulation-only checks and dumps
+# SYNTHESIS removes the simulation-only checks and dumps 显式定义 SYNTHESIS
 set_property verilog_define {SYNTHESIS} [get_filesets sources_1]
 
 # ---- block design
@@ -146,6 +156,14 @@ set_property generic "SEQ_WC=1'b$SEQ_WC MCOLS=$MCOLS ACT_ROWS=$ACT_ROWS VPU_CL=$
 # netlist at MCOLS 8 and up (otpu_mxu_place.tcl; below, the placer's: OTPU_MXU_PLACE=1 / 0 overrides);
 # the memory PHY's OSERDES data flops in pblocks beside their pads (otpu_ddr_phy_place.tcl;
 # OTPU_DDR_PHY_PLACE=0 leaves them to the placer)
+# ---- 约束：board（otpu_top_ld.xdc）以及 Core 的引脚、VREF 和同步器
+#（otpu_litedram.xdc）；在 IP 的约束条件之后，在实现的
+# 网表中，作为未管理的 Tcl 文件，每个 otpu_mem_ch 的交叉点（范围限定在模块内）以及顶层（otpu_top_native.tcl）；
+# 对于 CLK2X，core_clk 与 core_clk2x 之间的路径（otpu_clk2x.tcl）；MXU 的 systolic 数组
+# 作为 LOC 网格，每列位于其 ACT RAM 存储器旁边的 DSP 列上，由
+# MCOLS 8 及以上层级的网表生成（otpu_mxu_place.tcl；下方，布局器的设置：OTPU_MXU_PLACE=1 / 0 会覆盖此设置）；
+# 内存 PHY 的 OSERDES 数据触发器以 pblock 形式放置在各自引脚旁（otpu_ddr_phy_place.tcl；
+# OTPU_DDR_PHY_PLACE=0 则由布局器自动决定）
 set cons $root/boards/ypcb-00338/constraints
 add_files -fileset constrs_1 -norecurse [list $cons/otpu_top_ld.xdc \
   $root/boards/ypcb-00338/litedram/otpu_litedram.xdc]
@@ -165,6 +183,9 @@ foreach f $late {
 # ---- strategies: timing-driven, the accelerator is the critical part. OTPU_FAST=1 (run_vivado.sh
 # FAST=1): a development build at a relaxed clock (CORE_MHZ 100), with Vivado's default synthesis
 # (no retiming) and implementation (build.tcl: no post-route phys_opt, no impl_directives.tcl)
+# ---- 策略：基于时序，加速器是关键部分。OTPU_FAST=1 (run_vivado.sh
+# FAST=1)：以较低时钟频率（CORE_MHZ 100）进行的开发构建，采用 Vivado 的默认综合
+#（无重定时）和实现（build.tcl：无布线后 phys_opt，无 impl_directives.tcl）
 if {[info exists ::env(OTPU_FAST)] && $::env(OTPU_FAST) eq "1"} {
   set_property strategy {Vivado Synthesis Defaults} [get_runs synth_1]
   set_property strategy {Vivado Implementation Defaults} [get_runs impl_1]

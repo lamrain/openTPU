@@ -1,6 +1,9 @@
 // Host control registers (AXI4-Lite slave, reached from the host through the PCIe bridge's
 // BAR). All in the core clock domain. Register map version 5 (docs/observability.md: the
 // contract with the host); 12 address bits are decoded (the map repeats every 4 KiB).
+// 主机控制寄存器（AXI4-Lite 从机，通过 PCIe 桥的 BAR 由主机访问）。
+// 均位于内核时钟域中。寄存器映射版本 5（docs/observability.md：与
+// 主机的契约）；解码 12 位地址（该映射每 4 KiB 重复一次）。
 //
 //   0x00 ID        RO  0x4F545055 ("OTPU")
 //   0x04 VERSION   RO  {D[15:0], MCOLS[7:0], LANES[7:0]}
@@ -390,6 +393,19 @@ endmodule
 // into the master's next one; a new access waits for that. s_rst, the slave's reset (the LiteDRAM
 // core's sys reset: its PLL, or its ctrl_reset CSR): an access it had is answered SLVERR. An access
 // costs three cycles more (the request and the response registered).
+// 主设备与从设备之间的 AXI4-Lite 总线，两者的复位机制不同（otpu_board：控制寄存器；
+// otpu_fpga_top_ld：LiteDRAM 内核的 CSR 端口）。该模块设计的 SmartConnect（即主设备）
+// 通过 XDMA 的 axi_aresetn 进行复位（PERST#，以及 PCIe 热复位或链路断开）；控制
+// 寄存器随内核复位而复位（PERST#，而非热复位），而 LiteDRAM 内核的 CSR 端口则仅
+// 通过内核自身的时钟进行复位。一个在主设备复位后响应访问请求的从设备，向
+// 新主设备提供了一个它从未请求过的响应。每次处理一个访问：写操作的 AW 和 W 被
+// 一起获取（正如 otpu_ctrl 所做的那样），读操作的 AR 被获取并传递给从设备；其响应由
+// 从从机处获取并保留给主机。m_rst，即主机的复位：主机端会遗忘
+// 此次访问（已保留的响应被丢弃），但从机此前接收的内容已随该访问完成（AW
+// 和 W 均已处理，其响应被获取并丢弃），因此从机不会遇到半个访问请求，也不会
+// 混入主机的下一次访问中；新的访问将等待该操作完成。s_rst，从机的复位（LiteDRAM
+// 内核的系统复位：其 PLL 或 ctrl_reset CSR）：其正在进行的访问将返回 SLVERR 错误。一次访问
+// 需额外消耗三个时钟周期（请求和响应的寄存器操作）。
 module otpu_axil_iso #(
   parameter int AW = 32
 ) (

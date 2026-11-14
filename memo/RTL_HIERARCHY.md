@@ -1,59 +1,62 @@
 # openTPU RTL 层级
 
+> **LOC 统计口径**：按 module 定义范围内的有效物理代码行计数，包含 `module` 和
+> `endmodule` 行；不计空行、注释和预处理指令，并排除 `SYNTHESIS` 未定义时启用的
+> 仿真代码。技术替代模块按 YPCB-00338 构建所选文件计数（Xilinx7 DSP、generic
+> RAM）；Vivado 生成 IP 没有仓库内手写 RTL 源文件，标为“生成 IP，未统计”。
+
 本文从 [`rtl/top/otpu_top.sv`](rtl/top/otpu_top.sv) 出发，梳理核心 RTL 的模块层级和对应源文件。
 这里的“层级”指 SystemVerilog module 的实例化关系；同一个 `.sv` 文件可以定义多个可复用的 module。
 
 ## 1. 总体树
 
 ```text
-otpu_top                                      rtl/top/otpu_top.sv
-├── g_slice[S]                                每个 slice 一份
-│   ├── DRAM backend                          AXI 参数选择其一
-│   │   ├── otpu_dram                         rtl/mem/otpu_dram.sv             AXI=0
-│   │   ├── otpu_native_dram                  rtl/mem/otpu_native_dram.sv      AXI=1/2
-│   │   ├── otpu_native_mem                   sim/verilator/otpu_native_mem.sv AXI=1
-│   │   └── otpu_ldc_mem                      sim/verilator/otpu_ldc_mem.sv    AXI=2
-│   └── otpu_slice                            rtl/top/otpu_slice.sv
-│       ├── otpu_seq                          rtl/seq/otpu_seq.sv
-│       ├── otpu_tmem                         rtl/mem/otpu_tmem.sv
-│       ├── otpu_actram                       rtl/mem/otpu_actram.sv
-│       ├── otpu_dma                          rtl/dma/otpu_dma.sv
-│       ├── otpu_mxu                          rtl/mxu/otpu_mxu.sv
-│       │   ├── otpu_mx_lane                  rtl/mxu/otpu_mxu.sv
-│       │   ├── otpu_ram_sdp                  rtl/mxu/otpu_mxu.sv
-│       │   ├── otpu_skew                     rtl/mxu/otpu_mxu.sv
-│       │   ├── otpu_delay                    rtl/vpu/otpu_fpipe.sv
-│       │   └── otpu_pe / otpu_mxce           rtl/tech/*/otpu_tech_dsp.sv
+otpu_top (157 LOC)                                        rtl/top/otpu_top.sv
+├── g_slice[S]                                            每个 slice 一份
+│   ├── DRAM backend                                      AXI 参数选择其一
+│   │   ├── otpu_dram (67 LOC)                            rtl/mem/otpu_dram.sv             AXI=0
+│   │   ├── otpu_native_dram (508 LOC)                    rtl/mem/otpu_native_dram.sv      AXI=1/2
+│   │   ├── otpu_native_mem (296 LOC)                     sim/verilator/otpu_native_mem.sv AXI=1
+│   │   └── otpu_ldc_mem (340 LOC)                        sim/verilator/otpu_ldc_mem.sv    AXI=2
+│   └── otpu_slice (731 LOC)                              rtl/top/otpu_slice.sv
+│       ├── otpu_seq (616 LOC)                            rtl/seq/otpu_seq.sv
+│       ├── otpu_tmem (547 LOC)                           rtl/mem/otpu_tmem.sv
+│       ├── otpu_actram (134 LOC)                         rtl/mem/otpu_actram.sv
+│       ├── otpu_dma (728 LOC)                            rtl/dma/otpu_dma.sv
+│       ├── otpu_mxu (1090 LOC)                           rtl/mxu/otpu_mxu.sv
+│       │   ├── otpu_mx_lane (46 LOC)                     rtl/mxu/otpu_mxu.sv
+│       │   ├── otpu_ram_sdp (13 LOC)                     rtl/mxu/otpu_mxu.sv
+│       │   ├── otpu_skew (17 LOC)                        rtl/mxu/otpu_mxu.sv
+│       │   ├── otpu_delay (23 LOC)                       rtl/vpu/otpu_fpipe.sv
+│       │   └── otpu_pe (LOC: 36) / otpu_mxce (LOC: 61)   rtl/tech/xilinx7/otpu_tech_dsp.sv
 |       | 以下包含了 vpu 文件夹所有文件
-│       ├── otpu_quant                        rtl/vpu/otpu_quant.sv
-│       │   ├── otpu_qscale                   rtl/vpu/otpu_quant.sv
-│       │   ├── otpu_qdly                     rtl/vpu/otpu_quant.sv
-│       │   └── otpu_fmul / otpu_fmadd        rtl/vpu/otpu_fpipe.sv
-│       └── otpu_vpu                          rtl/vpu/otpu_vpu.sv
-│           ├── otpu_vtree                    rtl/vpu/otpu_vtree.sv
-│           │   └── otpu_fadd / otpu_fadd2    rtl/vpu/otpu_fpipe.sv
-│           ├── otpu_se_comp                  rtl/vpu/otpu_se_comp.sv
-│           │   └── otpu_fmadd                rtl/vpu/otpu_fpipe.sv
-│           ├── otpu_se_tail                  rtl/vpu/otpu_se_tail.sv
-│           │   ├── otpu_fmadd                rtl/vpu/otpu_fpipe.sv
-│           │   ├── otpu_fmma                 rtl/vpu/otpu_fpipe.sv
-│           │   ├── otpu_fmul                 rtl/vpu/otpu_fpipe.sv
-│           │   └── otpu_fadd                 rtl/vpu/otpu_fpipe.sv
-│           ├── otpu_fmma / otpu_fmadd        rtl/vpu/otpu_fpipe.sv
-│           └── otpu_fmul / otpu_fadd         rtl/vpu/otpu_fpipe.sv
-└── collective backend                        参数 COLL_GATHER 选择其一
-    ├── otpu_coll                             rtl/top/otpu_coll.sv       COLL_GATHER=1
-    └── otpu_coll_bar                         rtl/top/otpu_coll.sv       COLL_GATHER=0
+│       ├── otpu_quant (584 LOC)                          rtl/vpu/otpu_quant.sv
+│       │   ├── otpu_qscale (61 LOC)                      rtl/vpu/otpu_quant.sv
+│       │   ├── otpu_qdly (19 LOC)                        rtl/vpu/otpu_quant.sv
+│       │   └── otpu_fmul (LOC: 17) / fmadd (LOC: 15)     rtl/vpu/otpu_fpipe.sv
+│       └── otpu_vpu (1193 LOC)                           rtl/vpu/otpu_vpu.sv
+│           ├── otpu_vtree (160 LOC)                      rtl/vpu/otpu_vtree.sv
+│           │   └── otpu_fadd (LOC: 21) / fadd2 (LOC: 25) rtl/vpu/otpu_fpipe.sv
+│           ├── otpu_se_comp (413 LOC)                    rtl/vpu/otpu_se_comp.sv
+│           │   └── otpu_fmadd (15 LOC)                   rtl/vpu/otpu_fpipe.sv
+│           ├── otpu_se_tail (263 LOC)                    rtl/vpu/otpu_se_tail.sv
+│           │   ├── otpu_fmadd (15 LOC)                   rtl/vpu/otpu_fpipe.sv
+│           │   ├── otpu_fmma (16 LOC)                    rtl/vpu/otpu_fpipe.sv
+│           │   ├── otpu_fmul (17 LOC)                    rtl/vpu/otpu_fpipe.sv
+│           │   └── otpu_fadd (21 LOC)                    rtl/vpu/otpu_fpipe.sv
+│           ├── otpu_fmma (LOC: 16) / fmadd (LOC: 15)     rtl/vpu/otpu_fpipe.sv
+│           └── otpu_fmul (LOC: 17) / fadd (LOC: 21)      rtl/vpu/otpu_fpipe.sv
+└── collective backend                                    参数 COLL_GATHER 选择其一
+    ├── otpu_coll (LOC: 159)                              rtl/top/otpu_coll.sv       COLL_GATHER=1
+    └── otpu_coll_bar (LOC: 45)                           rtl/top/otpu_coll.sv       COLL_GATHER=0
 ```
 
-`S` 个 slice 共享 top 级 collective 接口，但每个 slice 拥有自己的 sequencer、
-DMA、TMEM、ACT RAM、MXU 和 VPU。
+`S` 个 slice 共享 top 级 collective 接口，但每个 slice 拥有自己的
+sequencer、DMA、TMEM、ACT RAM、MXU 和 VPU。
 `otpu_top` 只负责把这些单元连接起来，并选择 DRAM/collective 实现；
 具体指令执行由 `otpu_seq` 和各执行单元完成。
-`otpu_coll_hub` 和 `otpu_coll_port` 不属于 `otpu_top` 的子树，
-它们只在 `rtl/shell/otpu_board.sv` 的板级 collective 路径中出现。
 
-## 2. 根模块：`otpu_top`
+## 2. 根模块：`otpu_top`（LOC: 157）
 
 文件：[rtl/top/otpu_top.sv](rtl/top/otpu_top.sv)
 
@@ -65,9 +68,10 @@ DMA、TMEM、ACT RAM、MXU 和 VPU。
 - 汇总 `all_halted`、`any_error` 和每个 slice 的 `icount`；
 - 向 testbench 提供程序加载、运行参数、DRAM 和状态接口。
 
-### DRAM 条件分支（推测都是仿真用）
+### DRAM 条件分支（仅 otpu_top, 推测是仿真用）
 
 | 参数 | 文件 | 用途 |
+|---|---|---|
 | `AXI=0` | `rtl/mem/otpu_dram.sv`                                            | 固定延迟的行为级 DRAM 模型 |
 | `AXI=1` | `rtl/mem/otpu_native_dram.sv`、`sim/verilator/otpu_native_mem.sv` | native memory adapter 加延迟模型 |
 | `AXI=2` | `rtl/mem/otpu_native_dram.sv`、`sim/verilator/otpu_ldc_mem.sv`    | 接近 LiteDRAM channel 的仿真路径 |
@@ -82,7 +86,7 @@ DMA、TMEM、ACT RAM、MXU 和 VPU。
 - `COLL_GATHER=1`：实例化 `otpu_coll`，支持 slice 间 gather/read/write。
 - `COLL_GATHER=0`：实例化 `otpu_coll_bar`，只保留 barrier 风格路径，通常用于单 slice 或板卡受限配置。
 
-## 3. Slice 层：`otpu_slice`
+## 3. Slice 层：`otpu_slice`（LOC: 731）
 
 文件：[rtl/top/otpu_slice.sv](rtl/top/otpu_slice.sv)
 
@@ -110,7 +114,7 @@ otpu_seq
 
 ## 4. Sequencer、DMA 和存储层
 
-### `otpu_seq`
+### `otpu_seq`（LOC: 616）
 
 文件：[rtl/seq/otpu_seq.sv](rtl/seq/otpu_seq.sv)
 
@@ -124,14 +128,14 @@ otpu_seq
 
 Sequencer 使用的技术 RAM wrapper 来自技术映射文件，具体见第 8 节。
 
-### `otpu_dma`
+### `otpu_dma`（LOC: 728）
 
 文件：[rtl/dma/otpu_dma.sv](rtl/dma/otpu_dma.sv)
 
 处理 DRAM 与片上存储之间的数据搬运。它向 top 级 DRAM backend 发出 A/B/SW
 请求，向 TMEM 或 ACT RAM 发出读写，并处理地址、长度、stride、对齐和等待条件。
 
-### `otpu_tmem`
+### `otpu_tmem`（LOC: 547；helper `otpu_pump_bank`: LOC 50）
 
 文件：[rtl/mem/otpu_tmem.sv](rtl/mem/otpu_tmem.sv)
 
@@ -144,14 +148,14 @@ TMEM 是 VPU/MXU 共享的 fp32 tile memory。
 
 实际启用哪些 helper 由 `TMEM_IMPL`、`TMEM_TDP`、`TMEM_PMP`、`TMEM_RQ` 等参数决定。
 
-### `otpu_actram`
+### `otpu_actram`（LOC: 134）
 
 文件：[rtl/mem/otpu_actram.sv](rtl/mem/otpu_actram.sv)
 
 保存 MXU 的 stationary activation 和对应 scale。
 不同 FPGA/ASIC 技术映射下，底层 RAM wrapper 可来自 generic、ASIC 或 Xilinx 技术文件。
 
-## 5. MXU 层
+## 5. MXU 层：`otpu_mxu`（LOC: 1090）
 
 文件：[rtl/mxu/otpu_mxu.sv](rtl/mxu/otpu_mxu.sv)
 
@@ -168,42 +172,42 @@ DRAM weight stream + ACT RAM stationary data
 
 同一文件中定义的辅助 module 包括：
 
-- `otpu_mx_lane`：MXU lane/column 的乘加数据路径；
-- `otpu_ram_sdp`：simple-dual-port RAM wrapper；
-- `otpu_skew`：lane/column 数据 skew 和延迟；
-- `otpu_delay`：流水线延迟。
+- `otpu_mx_lane`（LOC: 46）：MXU lane/column 的乘加数据路径；
+- `otpu_ram_sdp`（LOC: 13）：simple-dual-port RAM wrapper；
+- `otpu_skew`（LOC: 17）   ：lane/column 数据 skew 和延迟；
+- `otpu_delay`（LOC: 23）  ：流水线延迟。
 
 MXU 还复用 `rtl/vpu/otpu_fpipe.sv` 中的浮点流水线 module，以及技术 DSP 文件中的 `otpu_pe`、`otpu_mxce`。
 `MXU_IMPL` 和 `CL` 参数决定使用 adder tree 还是 DSP cascade 等实现。
 
 ## 6. VPU 和量化层
 
-### `otpu_vpu`
+### `otpu_vpu`（LOC: 1193）
 
 文件：[rtl/vpu/otpu_vpu.sv](rtl/vpu/otpu_vpu.sv)
 
 VPU 是 slice 的 fp32 向量执行单元，负责 VOP、向量 load/store、广播、归约和特殊函数流水线。它连接以下子模块：
 
-- `otpu_vtree`：[rtl/vpu/otpu_vtree.sv](rtl/vpu/otpu_vtree.sv)，向量树形归约；
-- `otpu_se_comp`：[rtl/vpu/otpu_se_comp.sv](rtl/vpu/otpu_se_comp.sv)，复合特殊函数的控制/计算路径；
-- `otpu_se_tail`：[rtl/vpu/otpu_se_tail.sv](rtl/vpu/otpu_se_tail.sv)，特殊函数尾段、DeltaNet step 等路径；
-- `rtl/vpu/otpu_fpipe.sv` 中的 `otpu_fadd`、`otpu_fadd2`、`otpu_fmul`、
-  `otpu_fmadd`、`otpu_fmma`、`otpu_delay`；
+- `otpu_vtree`（LOC: 160）  ：[rtl/vpu/otpu_vtree.sv](rtl/vpu/otpu_vtree.sv)，向量树形归约；
+- `otpu_se_comp`（LOC: 413）：[rtl/vpu/otpu_se_comp.sv](rtl/vpu/otpu_se_comp.sv)，复合特殊函数的控制/计算路径；
+- `otpu_se_tail`（LOC: 263）：[rtl/vpu/otpu_se_tail.sv](rtl/vpu/otpu_se_tail.sv)，特殊函数尾段、DeltaNet step 等路径；
+- `rtl/vpu/otpu_fpipe.sv` 中的 `otpu_fadd`（LOC: 21）、`otpu_fadd2`（LOC: 25）、`otpu_fmul`（LOC: 17）、
+  `otpu_fmadd`（LOC: 15）、`otpu_fmma`（LOC: 16）、`otpu_delay`（LOC: 23）；
 - `rtl/vpu/otpu_fp.sv` 中的 fp32 package/function 定义。
 
 `otpu_se_comp` 和 `otpu_se_tail` 是 `otpu_vpu` 的可选特殊函数路径，
 是否启用由 `HAS_SE`、`HAS_SS`、模型/bitstream 参数决定。
 
-### `otpu_quant`
+### `otpu_quant`（LOC: 584）
 
 文件：[rtl/vpu/otpu_quant.sv](rtl/vpu/otpu_quant.sv)
 
 实现 fp32 到量化格式以及量化格式到 fp32 的转换，主要 helper 是：
 
-- `otpu_qdly`：量化流水线延迟；
-- `otpu_qscale`：scale 计算和应用。
+- `otpu_qdly`（LOC: 19）  ：量化流水线延迟；
+- `otpu_qscale`（LOC: 61）：scale 计算和应用。
 
-## 7. Collective 层
+## 7. Collective 层：`otpu_coll`（LOC: 159）
 
 文件：[rtl/top/otpu_coll.sv](rtl/top/otpu_coll.sv)
 
@@ -214,8 +218,8 @@ VPU 是 slice 的 fp32 向量执行单元，负责 VOP、向量 load/store、广
 
 ```text
 otpu_board
-├── otpu_coll_hub
-└── otpu_coll_port[S]
+├── otpu_coll_hub (LOC: 88)
+└── otpu_coll_port[S] (LOC: 74 each)
 ```
 
 `otpu_coll_hub` 负责多个 slice 的请求仲裁、读数据广播、写数据路由和 gather 协调；
@@ -250,19 +254,19 @@ DDR/AXI shell 和 `otpu_board` 集成，不应与 core `otpu_top` 的层级混�
 以 YPCB-00338 的 LiteDRAM 构建为例，板级层次可以分成三部分：
 
 ```text
-otpu_fpga_top_ld                         rtl/boards/ypcb-00338/otpu_fpga_top_ld.sv
-├── otpu_bd_wrapper                      Vivado block design wrapper
-├── otpu_litedram                        LiteDRAM 生成的 DDR3 controller
-├── otpu_native_sys                      rtl/boards/ypcb-00338/otpu_native_sys.sv
-│   ├── otpu_dma_split                   rtl/shell/otpu_axi_split2.sv
-│   ├── otpu_mem_ch[2]                   rtl/shell/otpu_mem_ch.sv
-│   └── otpu_board                       rtl/shell/otpu_board.sv
-│       ├── otpu_axil_iso                rtl/shell/otpu_ctrl.sv
-│       ├── otpu_ctrl                    rtl/shell/otpu_ctrl.sv
-│       ├── otpu_trace                   rtl/shell/otpu_trace.sv
-│       ├── otpu_slice[S]                rtl/top/otpu_slice.sv
-│       └── collective: otpu_coll / bar  rtl/top/otpu_coll.sv
-└── board I/O                            clock / reset / I2C / GPIO / transceiver
+otpu_fpga_top_ld (LOC: 238)                                  rtl/boards/ypcb-00338/otpu_fpga_top_ld.sv
+├── otpu_bd_wrapper (generated IP; LOC N/A)                  Vivado block design wrapper
+├── otpu_litedram (generated IP; LOC N/A)                    LiteDRAM DDR3 controller
+├── otpu_native_sys (LOC: 182)                               rtl/boards/ypcb-00338/otpu_native_sys.sv
+│   ├── otpu_dma_split (LOC: 111)                            rtl/shell/otpu_axi_split2.sv
+│   ├── otpu_mem_ch[2] (LOC: 440 each)                       rtl/shell/otpu_mem_ch.sv
+│   └── otpu_board (LOC: 446)                                rtl/shell/otpu_board.sv
+│       ├── otpu_axil_iso (LOC: 87)                          rtl/shell/otpu_ctrl.sv
+│       ├── otpu_ctrl (LOC: 264)                             rtl/shell/otpu_ctrl.sv
+│       ├── otpu_trace (LOC: 217)                            rtl/shell/otpu_trace.sv
+│       ├── otpu_slice[S] (LOC: 731 each)                    rtl/top/otpu_slice.sv
+│       └── collective: otpu_coll (LOC: 159) / bar (LOC: 45) rtl/top/otpu_coll.sv
+└── board I/O                                                clock / reset / I2C / GPIO / transceiver
 ```
 
 `otpu_fpga_top_ld.sv` 还包含板级时钟缓冲、I/O buffer、生成的 Vivado block design 和 LiteDRAM 连接。

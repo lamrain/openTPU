@@ -2,6 +2,9 @@
 # The production build (docs/board.md). Every value here is what `make -C boards/ypcb-00338 bit`
 # builds by default; opentpu/target.py derives the RTL parameters, the Vivado generics, the
 # simulators' configuration and the host's expectations from it.
+# 浪潮 YPCB-00338 开发板：Xilinx Kintex-7 xc7k480t，两个 DDR3 通道，PCIe Gen2 x8。
+# 生产构建（docs/board.md）。此处的每个值均为 `make -C boards/ypcb-00338 bit`
+# 默认构建的结果；opentpu/target.py 据此推导出 RTL 参数、Vivado 通用参数、仿真器的配置以及主机端的预期。
 
 [target]
 name = "ypcb-00338"
@@ -75,6 +78,9 @@ pcie_lanes = 8
 # Variants (opentpu/target.py: TARGET / OTPU_TARGET = ypcb-00338:<name>): arch and uarch values
 # over the ones above, each variant its own CFG_HASH. The [arch] and [uarch] above state the default
 # variant's (m4: release r2's production candidate, 133.33 MHz; m8 does not close it yet: r2.1).
+# 变体（opentpu/target.py：TARGET / OTPU_TARGET = ypcb-00338:<名称>）：arch 和 uarch 值
+# 与上述值不同，每个变体都有各自的 CFG_HASH。上文中的 [arch] 和 [uarch] 指明了默认
+# 变体的参数（m4：r2 版本的量产候选版，133.33 MHz；m8 尚未定稿：r2.1）。
 [variants.m8]                   # release r2.1: 8 MX columns at E 8, 128K TMEM words (CFG_HASH 46b96e6d)
 MCOLS = 8
 MXU_E = 8

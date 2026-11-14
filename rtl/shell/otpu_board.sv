@@ -18,6 +18,26 @@
 // they keep starting together), and the collective runs through otpu_coll_hub and a port per
 // slice (otpu_coll_port: each slice grants the collective's TMEM accesses on its own). At S = 1
 // the signals are wired as before (g_x1: the same logic, tools/synth/board_equiv.sh).
+// 为 PCIe 板卡设计的加速器：S 个切片（YPCB-00338 上一个，
+// BCU1525 上两个），每个切片均通过其 DRAM 适配器 otpu_native_dram 连接至两个内存通道的原生端口
+// n_*（每 64 字节节拍一个命令，用于 LiteDRAM 原生端口前端的 otpu_mem_ch：切片
+// s 分别位于通道 2s 和 2s + 1），集体单元以及主机控制寄存器（AXI4-Lite
+// 从机）。所有操作均在核心时钟下运行；电路板顶层负责将时钟传输至
+// 内存控制器和 PCIe bridge（YPCB 上的 otpu_native_sys）。各切片共享一个
+// 控制块：RUN、LOAD（每个切片从自己的 DRAM 加载程序）以及参数
+// 会发送至每个切片；当所有切片均停止时为 HALTED，当任一切片停止时为 ERROR / WAIT_TO；ICOUNT 属于
+// 切片 0，ICOUNT_s 属于各切片（0xC0 + 4s）；跟踪和活动计数器属于切片
+// 0，但 DRAM_RD / DRAM_WR（每个通道）和 INSTR（每个切片）除外。
+// 切片 0 的实例保留单切片名称（u_slice、u_mem），其余为 g_slice[s]。
+// 控制块还持有自由运行的活动计数器，并读出硬件跟踪
+// （otpu_trace；docs/observability.md）；当主机请求时，它还会将 I2C 引脚拉低，
+// 并读回其电平（主机通过位操作实现 I2C）。
+// 当 S > 1 时，每个切片位于各自的 SLR（即 BCU1525 的）中，与控制
+// 块和集合单元相隔一个交叉点：切片与它们之间的所有数据在每个方向上都要经过两个寄存器
+// 级（otpu_xr：交叉点两侧各一个；g_xs），切片的控制数据也是如此 （因此
+// 它们能保持同步启动），而集体操作则通过 otpu_coll_hub 以及每个
+// 切片对应的一个端口（otpu_coll_port：每个切片独立授予集体操作对 TMEM 的访问权限）。
+// 当 S = 1 时信号的连接方式与之前相同（g_x1：相同的逻辑，tools/synth/board_equiv.sh）。
 module otpu_board #(
   parameter int S          = 1,         // slices, each on two memory channels
   parameter int D          = 128,
@@ -560,6 +580,9 @@ endmodule
 // One register stage of an SLR crossing (otpu_board at S > 1: a pair per direction and slice, one
 // stage on each side). The low RW bits (valid pulses, request levels) clear with rst; the others
 // are data. max_fanout: a stage's reset bit drives a slice's whole core reset (as core_rst).
+// SLR crossing 的一个寄存器级（otpu_board 在 S > 1 时：每个方向和每个切片各有一对，每侧各一个级）。
+// 低位的读写位（有效脉冲、请求电平）在 rst 时清零；其余位为数据位。
+// max_fanout：一个级的复位位会驱动整个切片的核心复位（即 core_rst）。
 module otpu_xr #(
   parameter int W  = 1,
   parameter int RW = 0

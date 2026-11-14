@@ -10,11 +10,16 @@ ROOT := $(abspath ../..)
 DDR ?= 1066
 # DDR: 1066, the speed the LiteDRAM core is generated for (the fastest in spec for these HR banks
 # at 1.5 V, docs/board.md section 5)
+# DDR：1066，LiteDRAM 内核的生成速度（这些 HR banks 在 1.5 V 下的规格中最快，详见 docs/board.md 第 5 节）
 # CORE_MHZ: accelerator clock, default 133.33 (800 / 6: the 128-byte port matches both DDR3-1066
 #   channels, 17.07 GB/s; the production image closes it at full effort) or 100 with FAST=1 (a
 #   development build: Vivado's default strategies)
+# CORE_MHZ：加速器时钟，默认值为 133.33（800 / 6：128 字节端口同时匹配两个 DDR3-1066
+# 通道，17.07 GB/s；生产镜像在满负荷运行时会将其关闭）或当 FAST=1 时为 100（开发版本：Vivado 的默认策略）
 # TARGET: the target and its variant (targets/ypcb-00338.toml [variants]: m8, the default, 8 columns at E 8
 #   and 128K TMEM words; m4, 4 columns at E 4 and 64K); the knobs below override it
+# TARGET：目标及其变体（targets/ypcb-00338.toml [变体]：m8，默认值，E 8 处 8 列
+#   及 128K TMEM 字；m4，4 列，E 4 及 64K）；下方的参数可覆盖此设置
 # MCOLS: MXU columns, 4 or 8 (default the target's; the host reads it from the bitstream's VERSION register)
 # VPU_CL: VPU lanes with exp2/recip/rsqrt, 2 or 4 (timing only: the programs do not change)
 # LANES: VPU lanes / TMEM banks, 8 or 16 (timing only; the host reads it from VERSION)
@@ -48,6 +53,7 @@ RTL := $(addprefix $(ROOT)/rtl/, vpu/otpu_fp.sv vpu/otpu_fpipe.sv top/otpu_pkg.s
   shell/otpu_axi_split2.sv boards/ypcb-00338/otpu_native_sys.sv)
 # MXU_IMPL: the MXU create_project.tcl builds (MXU systolic, the default: 2); the systolic cells'
 # DSP48E1 comes from a lint stub
+# 离线 lint 也显式定义了 SYNTHESIS
 MXU_IMPL ?= 2
 LINT := verilator --lint-only -Wno-fatal -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSEDSIGNAL \
   -Wno-UNUSEDPARAM -DSYNTHESIS $(if $(MCOLS),-GMCOLS=$(MCOLS)) $(if $(ACT_ROWS),-GACT_ROWS=$(ACT_ROWS)) $(if $(MXU_E),-GMXU_E=$(MXU_E)) \

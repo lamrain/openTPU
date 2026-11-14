@@ -2,20 +2,35 @@
 # resets, the XADC and the control interconnect. No memory controllers and no memory
 # interconnect: the accelerator (otpu_board) and XDMA's DMA meet on each channel in otpu_mem_ch
 # (otpu_native_sys), outside the block design, in front of the LiteDRAM core. External interfaces:
+# YPCB-00338 的“otpu_bd”模块设计（create_project.tcl）：PCIe（XDMA）、核心时钟、
+# 复位、XADC 以及控制互连。无内存控制器，也无内存
+# 互连：加速器（otpu_board）与 XDMA 的 DMA 在 otpu_mem_ch
+#（otpu_native_sys）中的每个通道上汇合，位于 block 设计之外，LiteDRAM 内核之前。外部接口：
 #   M_AXI_CTL     AXI4-Lite master -> the accelerator's control registers (BAR0 0x0000, core_clk)
 #   M_AXI_DMA     AXI4 master, 128b -> the channels (XDMA's DMA, xdma_aclk; bit 31 = channel)
 #   M_AXI_MEMCAL  AXI4-Lite master -> the LiteDRAM core's CSRs (BAR0 0x10000, 64 KB, xdma_aclk;
 #                 core_clk at PCIE_GEN 2: the core crosses them into its own clock;
 #                 opentpu/host/memcal.py)
+#   M_AXI_CTL     AXI4-Lite 主控器 → 加速器的控制寄存器（BAR0 0x0000，core_clk）
+#   M_AXI_DMA     AXI4 主控器，128b → 通道（XDMA 的 DMA，xdma_aclk；第 31 位 = 通道）
+#   M_AXI_MEMCAL  AXI4-Lite 主控 → LiteDRAM 内核的 CSRs（BAR0 0x10000，64 KB，xdma_aclk；
+#                 core_clk 在 PCIE_GEN 2 模式下：内核将其转换为自身的时钟；
+#                 opentpu/host/memcal.py）
 # and device_temp (the XADC die-temperature code, core_clk; BAR0 0x30000: the XADC registers).
 #
 # Clocks: the 50 MHz clock arrives already on a global buffer (otpu_fpga_top_ld.sv: the LiteDRAM
 # core's MMCMs share it), so the clock wizard has no input buffer and makes core_clk only.
 # xdma_aclk 125 MHz (Gen1 x8, 128 bits; 250 MHz at Gen2 x8).
+# 时钟：50 MHz 时钟已通过全局缓冲区输入（otpu_fpga_top_ld.sv：LiteDRAM
+# 内核的 MMCM 共享该时钟），因此时钟向导无需输入缓冲区，仅生成 core_clk。
+# xdma_aclk 125 MHz（Gen1 x8，128 位；Gen2 x8 时为 250 MHz）。
 #
 # Variables (set before sourcing): CORE_MHZ, CLK2X (below). Environment: PCIE_GEN, 2 (Gen2 x8: 5 GT/s, xdma_aclk
 # 250 MHz, the PCIe block's userclk1 500 MHz; the production setting since g2fix 0885d436, the
 # default) or 1 (Gen1 x8, 125 MHz; docs/offload.md section 6).
+# 变量（在加载文件前设置）：CORE_MHZ、CLK2X（见下文）。环境变量：PCIE_GEN，2（Gen2 x8：5 GT/s，xdma_aclk
+# 250 MHz，PCIe 模块的 userclk1 为 500 MHz；自 g2fix 0885d436 版本起的生产环境设置，即
+# 默认值）或 1（Gen1 x8，125 MHz；参见 docs/offload.md 第 6 节）。
 
 # the newest installed version of an IP
 proc ip_vlnv {name} {
@@ -185,6 +200,11 @@ set_property CONFIG.FREQ_HZ $XDMA_HZ [get_bd_ports xdma_aclk]
 # that is core_clk's (in whole MHz, rounded up: the divider errs high). The fixed 100 gave a
 # divider of 4: 33 MHz at core_clk 133.33 MHz, out of spec (build.tcl checks the divider the
 # netlist has).
+# temp_out 对应加速器的 TEMP 寄存器，XADC 寄存器位于 BAR0 0x30000。其 DCLK 为
+# core_clk：向导会将其从 DCLK_FREQUENCY 分频至 ADCCLK（最高 26 MHz，DS182），因此
+# 该值即为 core_clk 的频率（以整 MHz 为单位，向上取整：分频器会产生偏高误差）。固定的 100 导致
+# 分频比为 4：当 core_clk 为 133.33 MHz 时，输出频率为 33 MHz，超出规格（build.tcl 会检查
+# 网表中的分频比）。
 set XADC_DCLK_MHZ [expr {int(ceil($CORE_HZ / 1.0e6))}]
 set xadc [create_bd_cell -type ip -vlnv [ip_vlnv xadc_wiz] xadc_temp]
 set_property -dict [list CONFIG.INTERFACE_SELECTION {Enable_AXI} CONFIG.DCLK_FREQUENCY $XADC_DCLK_MHZ \
