@@ -1,6 +1,8 @@
 // VPU: LANES fp32 elements per cycle along a row of a [rows, cols] TMEM tile. Operand A from
 // read port A, operand B from read port B (full tile, per-column), one broadcast word (per-row)
 // or the scalar immediate (docs/isa.md, VOP).
+// VPU：沿 [rows, cols] TMEM tile 的一行，每个周期 LANES 个 fp32 元素。操作数 A 来自
+// 读取端口 A，操作数 B 来自读取端口 B（整块 tile，每列），一个广播字（每行）或标量立即数（docs/isa.md，VOP）。
 //
 // Pipelined for the FPGA clock. Split lanes: lanes 0..CL-1 are chains of NSLOT multiply-add
 // slots (slot = (a*b)+c with its own input register, SL = 1 + LM + LA cycles; slot 1 has three

@@ -1,6 +1,10 @@
 # 已经测试的命令
 # RTL tests also need Verilator 5 回归测试
-python3 -m pytest -q          
+python3 -m pytest -q
+# 检查 filelist
+pytest -q tests/test_target.py::test_rtl_file_lists_agree
+# 检查文件是否读全
+pytest -q 'tests/test_rtl.py::test_mlp_rtl[1]' tests/test_board.py::test_program_on_board_model
 
 # 4-bit layers ISA 与 CPU golden 比对
 python3 tools/validate.py --model qwen3

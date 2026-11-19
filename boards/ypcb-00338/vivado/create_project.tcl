@@ -109,18 +109,16 @@ set_property default_lib xil_defaultlib [current_project]
 # the generated LiteDRAM core (Verilog)
 # ---- RTL（SystemVerilog）：加速器（otpu_board 及其 DRAM 适配器 otpu_native_dram）、
 # 各通道的原生端口（每个通道一个 otpu_mem_ch，XDMA 的拆分：otpu_native_sys）、顶层以及生成的 LiteDRAM 内核（Verilog）
-set rtl [list \
-  rtl/vpu/otpu_fp.sv rtl/vpu/otpu_fpipe.sv rtl/top/otpu_pkg.sv \
-  rtl/mem/otpu_tmem.sv rtl/mem/otpu_actram.sv \
-  rtl/seq/otpu_seq.sv rtl/vpu/otpu_vtree.sv rtl/dma/otpu_dma.sv \
-  rtl/mxu/otpu_mxu.sv rtl/tech/xilinx7/otpu_tech_dsp.sv rtl/tech/generic/otpu_tech_ram.sv \
-  rtl/vpu/otpu_quant.sv rtl/vpu/otpu_se_comp.sv rtl/vpu/otpu_se_tail.sv rtl/vpu/otpu_vpu.sv rtl/top/otpu_coll.sv \
-  rtl/top/otpu_slice.sv \
-  rtl/shell/otpu_ctrl.sv rtl/shell/otpu_trace.sv \
-  rtl/shell/otpu_board.sv rtl/mem/otpu_native_dram.sv \
-  rtl/shell/otpu_afifo.sv rtl/shell/otpu_mem_ch.sv \
-  rtl/shell/otpu_axi_split2.sv rtl/boards/ypcb-00338/otpu_native_sys.sv \
-  rtl/boards/ypcb-00338/otpu_fpga_top_ld.sv]
+set rtl_filelist [file normalize "$root/boards/ypcb-00338/rtl.f"]
+if {![file isfile $rtl_filelist]} { error "RTL filelist not found: $rtl_filelist" }
+set f [open $rtl_filelist r]
+set rtl {}
+while {[gets $f line] >= 0} {
+  set line [string trim $line]
+  if {$line eq "" || [string match "#*" $line]} { continue }
+  lappend rtl $line
+}
+close $f
 add_files -norecurse $root/boards/ypcb-00338/litedram/otpu_litedram.v
 # the core's identifier ROM ("openTPU LiteDRAM"), which the Verilog $readmemh's by file name:
 # synthesis finds it as a project file
@@ -129,8 +127,10 @@ add_files -norecurse $root/boards/ypcb-00338/litedram/otpu_litedram.v
 add_files -norecurse $root/boards/ypcb-00338/litedram/otpu_litedram_mem.init
 set_property FILE_TYPE {Memory Initialization Files} [get_files otpu_litedram_mem.init]
 foreach f $rtl {
-  add_files -norecurse $root/$f
-  set_property file_type SystemVerilog [get_files $root/$f]
+  set source_file [file normalize [file join $root $f]]
+  if {![file isfile $source_file]} { error "RTL file not found (from $rtl_filelist): $source_file" }
+  add_files -norecurse $source_file
+  set_property file_type SystemVerilog [get_files $source_file]
 }
 # SYNTHESIS removes the simulation-only checks and dumps 显式定义 SYNTHESIS
 set_property verilog_define {SYNTHESIS} [get_filesets sources_1]

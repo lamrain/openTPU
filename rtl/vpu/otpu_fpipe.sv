@@ -1,5 +1,7 @@
 // Pipelined fp32 operators built from the staged functions of otpu_fp. Every register advances
 // with `en`: a unit freezes as a whole while its TMEM grant is withheld.
+// 由 otpu_fp 的分阶段函数构建的流水线化 fp32 运算符。每个寄存器均通过 `en` 进位：
+// 当其 TMEM 配额被暂缓分配时，该单元将整体处于冻结状态。
 //
 //   otpu_fmul    y = a * b                LAT >= 2 (s1 | s2, extra cycles appended)
 //   otpu_fadd    y = a + b                LAT >= 4 (s1 | s2 | s3 | s4, extra cycles appended)
@@ -76,6 +78,7 @@ endmodule
 
 // otpu_fadd (LAT 4) with a second copy of its result register (yo), kept apart from y's: for a
 // load far from the others
+// otpu_fadd（LAT 4）及其结果寄存器（yo）的第二份副本，与 y 的副本分开存放：用于从其他寄存器远处加载数据
 module otpu_fadd2
   import otpu_fp::*;
 (

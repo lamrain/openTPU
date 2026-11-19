@@ -20,15 +20,20 @@ RTL = ROOT / "rtl"
 TB = ROOT / "sim" / "verilator"
 BUILD = ROOT / "build" / "verilator"
 
-RTL_SOURCES = [
-    "vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_dram.sv", "mem/otpu_tmem.sv",
-    "mem/otpu_native_dram.sv", "mem/otpu_actram.sv", "seq/otpu_seq.sv",
-    "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
-    "tech/generic/otpu_tech_ram.sv",
-    "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv", "vpu/otpu_vpu.sv",
-    "top/otpu_coll.sv", "exp/tmem_nocopy/otpu_tmem_model.sv", "top/otpu_slice.sv",
-    "top/otpu_top.sv",
-]
+def read_filelist(path: Path, base: Path) -> list[Path]:
+    """Read a comment-aware, one-path-per-line source list relative to `base`."""
+    files = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            files.append((base / line).resolve())
+    return files
+
+RTL_SIM_LIST = TB / "rtl_sim.f"
+BOARD_SIM_LIST = TB / "board_sim.f"
+RTL_SOURCES = [p.relative_to(ROOT).as_posix()
+               for p in read_filelist(RTL_SIM_LIST, ROOT)]
+BOARD_SOURCES = read_filelist(BOARD_SIM_LIST, ROOT)
 
 
 # Verilator's flags (in the build cache's key, with its version and the sources' names)
@@ -286,7 +291,7 @@ def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool = Fal
     shell = RTL / "shell"
     mem = ([shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv", TB / LDC_MODELS[ldc],
             TB / "otpu_ldc_mem.sv"] if ldc else [TB / "otpu_native_mem.sv"] if axi else [])
-    return build("tb_top", [RTL / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
+    return build("tb_top", [ROOT / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
                  top_params(cfg, dram_lat, uarch, 2 if ldc else axi, dram_bytes))
 
 

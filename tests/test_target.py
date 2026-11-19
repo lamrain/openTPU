@@ -308,31 +308,40 @@ def test_device_config_before_map_4_is_the_card(no_env):
 
 # ------------------------------------------------------------------------------ RTL file lists
 def _make_rtl(path: Path) -> list[str]:
-    """The board Makefile's RTL list (rtl/ paths)."""
+    """The board Makefile's RTL list (repository-root-relative paths)."""
+    filelist = path.parent / "rtl.f"
+    if filelist.is_file():
+        return [line.strip() for line in filelist.read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
     m = re.search(r"RTL := \$\(addprefix \$\(ROOT\)/rtl/, (.*?)\)\n", path.read_text(), re.S)
     return ["rtl/" + f for f in m.group(1).replace("\\", " ").split()]
 
 
 def _tcl_rtl(path: Path) -> list[str]:
+    filelist = path.parent.parent / "rtl.f"
+    if filelist.is_file():
+        return [line.strip() for line in filelist.read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
     m = re.search(r"set rtl \[list \\(.*?)\]\n", path.read_text(), re.S)
     return m.group(1).replace("\\", " ").split()
 
 
 def test_rtl_file_lists_agree():
-    """Every flow's RTL list is opentpu.target.sources(): the board Makefile's lint and
-    create_project.tcl (the board's top last, the Makefile linting it separately), the
-    simulators' (rtlsim.RTL_SOURCES: the generic cells, plus the simulation-only DRAM model,
-    native adapter, top and single-copy TMEM grant model) and tools/synth's."""
+    """The board filelist and simulator filelists agree with target sources."""
     from opentpu import rtlsim
     card = [f"rtl/{f}" for f in T.sources("ypcb-00338")]
     tcl = _tcl_rtl(ROOT / "boards/ypcb-00338/vivado/create_project.tcl")
     assert tcl == card
     make = _make_rtl(ROOT / "boards/ypcb-00338/Makefile")
-    assert make == [f for f in card if not f.endswith("otpu_fpga_top_ld.sv")]
-    sim = [f for f in rtlsim.RTL_SOURCES
-           if f not in ("mem/otpu_dram.sv", "mem/otpu_native_dram.sv", "top/otpu_top.sv",
-                        "exp/tmem_nocopy/otpu_tmem_model.sv")]
+    assert make == card
+    sim = [f.removeprefix("rtl/") for f in rtlsim.RTL_SOURCES
+           if f not in ("rtl/mem/otpu_dram.sv", "rtl/mem/otpu_native_dram.sv",
+                        "rtl/top/otpu_top.sv", "rtl/exp/tmem_nocopy/otpu_tmem_model.sv")]
     assert sim == T.sources("nangate45", "generic")
+    assert all(f.is_file() for f in rtlsim.BOARD_SOURCES)
+    assert ROOT / "sim/verilator/tb_board.sv" in rtlsim.BOARD_SOURCES
+    assert (ROOT / "sim/verilator/rtl_sim.f").is_file()
+    assert (ROOT / "sim/verilator/board_sim.f").is_file()
     for f in T.CORE + T.SHELL + sum(T.TECH.values(), []) + sum(T.BOARDS.values(), []):
         assert (ROOT / "rtl" / f).exists(), f
     bcu = [f"rtl/{f}" for f in T.sources("bcu1525")]

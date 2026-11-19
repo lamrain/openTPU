@@ -256,6 +256,7 @@ DDR/AXI shell 和 `otpu_board` 集成，不应与 core `otpu_top` 的层级混�
 ```text
 otpu_fpga_top_ld (LOC: 238)                                  rtl/boards/ypcb-00338/otpu_fpga_top_ld.sv
 ├── otpu_bd_wrapper (generated IP; LOC N/A)                  Vivado block design wrapper
+├── otpu_axil_iso (LOC: 87)                                  rtl/shell/otpu_ctrl.sv
 ├── otpu_litedram (generated IP; LOC N/A)                    LiteDRAM DDR3 controller
 ├── otpu_native_sys (LOC: 182)                               rtl/boards/ypcb-00338/otpu_native_sys.sv
 │   ├── otpu_dma_split (LOC: 111)                            rtl/shell/otpu_axi_split2.sv

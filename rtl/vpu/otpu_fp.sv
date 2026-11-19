@@ -2,6 +2,10 @@
 // IEEE-754 binary32, round-to-nearest-even, flush-to-zero on inputs and outputs.
 // Bit-exact with opentpu/fp32.py. Functions are combinational; composite functions (exp2,
 // recip, rsqrt, log2) are fixed sequences of fp_add/fp_mul.
+// openTPU fp32 算术（docs/isa.md “算术”）。
+// IEEE-754 binary32，舍入到最接近的偶数，输入和输出均清零。
+// 使用 opentpu/fp32.py 时位精确。函数为组合型；复合函数
+// (exp2, recip, rsqrt, log2) 是 fp_add/fp_mul 的固定组成序列。
 package otpu_fp;
 
   typedef logic [31:0] f32_t;

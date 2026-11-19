@@ -4,6 +4,11 @@
 // back in the order of their AW / AR, whatever the IDs (legal, and XDMA's own order), so a
 // response from the other channel waits for the older ones. Up to OD transactions of each kind
 // in flight. Valids to the channels depend on no ready.
+// 通过地址位 31 进行 AXI4 1 到 2 的拆分（XDMA 的 M_AXI 映射到两个通道的桥接器上，
+// otpu_mem_ch；通道 0 位于 0x0000_0000，通道 1 位于 0x8000_0000，
+// 如 opentpu/host/board.py 中的地址映射所示）。一个时钟周期。W 时钟脉冲遵循其 AW 所属的通道；B 和 R 响应
+// 按其 AW / AR 的顺序返回，无论 ID 如何（这是合法的，也是 XDMA 自身的顺序），
+// 因此来自另一通道的响应需等待较早的响应。每种类型的交易最多可有 OD 个正在处理中。通道的有效信号取决于是否已就绪。
 module otpu_axi_split2 #(
   parameter int IDW = 4,
   parameter int DW  = 128,
@@ -223,6 +228,10 @@ endmodule
 // REG (PCIe Gen2: xdma_aclk at 250 MHz), a register slice (otpu_axi_slice) on each side of it, at
 // XDMA's and at each bridge's, so no path between XDMA and a bridge, which sits by its DDR3 bank,
 // is combinational at either end (two cycles of latency each way). REG = 0: the split alone.
+// 将 XDMA 的 DMA 主控端连接至两个通道的桥接器（otpu_native_sys）：otpu_axi_split2，并配合
+// REG（PCIe Gen2：xdma_aclk 频率为 250 MHz），在桥接器两侧各配置一个寄存器slice（otpu_axi_slice），
+// 位于 XDMA 端和各桥接器端，因此 XDMA 与位于其 DDR3 存储器 bank 旁的桥接器之间，
+// 两端均不采用组合逻辑（每个方向延迟两个时钟周期）。REG = 0：仅执行拆分操作。
 module otpu_dma_split #(
   parameter bit REG = 1'b0,
   parameter int IDW = 4,

@@ -556,15 +556,9 @@ class SimTransport:
         if not self.script:
             return
         from opentpu import rtlsim, simtmp     # (the simulator's: not on the card's path)
-        root = Path(__file__).resolve().parents[2]
-        srcs = [rtlsim.RTL / s for s in rtlsim.RTL_SOURCES if not s.endswith("otpu_top.sv")]
-        shell = root / "rtl/shell"                  # the FPGA boards' shell (docs/targets.md)
-        srcs += [shell / "otpu_ctrl.sv", shell / "otpu_trace.sv", shell / "otpu_board.sv"]
+        srcs = [rtlsim.ROOT / s for s in rtlsim.RTL_SOURCES if s != "rtl/top/otpu_top.sv"]
+        srcs += rtlsim.BOARD_SOURCES
         native = rtlsim.MEMORY["NATIVE"] if self.native is None else self.native
-        srcs += [rtlsim.TB / "otpu_native_mem.sv", shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv",
-                 shell / "otpu_axi_split2.sv",      # otpu_native_reg (tb_board NREG)
-                 rtlsim.TB / "otpu_chmem.sv", rtlsim.TB / "otpu_ldn_model.sv"]
-        srcs += [rtlsim.TB / "tb_board.sv"]
         from opentpu.isasim import board_config
         cfg = board_config()                        # OTPU_MCOLS / OTPU_LANES: the "bitstream"
         # VPU_CL and ULANES as the bitstream builds them (make bit: VPU_CL 2, ULANES 8)
